@@ -1,0 +1,22 @@
+# Generované (XcodeGen)
+*.xcodeproj
+Config/Info.plist
+
+# Build
+build/
+DerivedData/
+dist/
+*.dmg
+*.zip
+
+# Tajemství – nikdy do gitu
+*.p12
+*.key
+*.pem
+Config/Secrets.xcconfig
+.env
+
+# macOS / editor
+.DS_Store
+.swiftpm/
+xcuserdata/

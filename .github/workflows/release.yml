@@ -1,0 +1,111 @@
+name: Release
+
+# Nový release: git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write   # jen pro vytvoření GitHub Release
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      APP: NotchMax
+      SPARKLE_VERSION: "2.10.1"   # stejná verze, kterou jsi použil pro generate_keys
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kontrola zástupných hodnot v project.yml
+        run: |
+          if grep -q 'REPLACE_WITH_PUBLIC_ED_KEY\|/OWNER/' project.yml; then
+            echo "project.yml stále obsahuje zástupné hodnoty (OWNER / REPLACE_WITH_PUBLIC_ED_KEY), viz README"
+            exit 1
+          fi
+
+      - name: Vybrat nejnovější Xcode (kvůli Liquid Glass je potřeba Xcode 26)
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1 || true)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; else echo "Xcode 26 nenalezen, použije se výchozí (fallback sklo)"; fi
+          xcodebuild -version
+
+      - name: Verze z tagu
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.0"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD=${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Vygenerovat Xcode projekt
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (universal)
+        run: |
+          xcodebuild -project NotchMax.xcodeproj -scheme NotchMax -configuration Release \
+            -derivedDataPath build ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Import podpisového certifikátu (volitelné)
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12 }}
+          PW: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then
+            echo "Bez certifikátu: ad-hoc podpis (oprávnění se po updatu mohou resetovat)"
+            echo "SIGN_ID=-" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/build.keychain-db"; KPW="$(uuidgen)"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KPW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KPW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$PW" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KPW" "$KC"
+          security list-keychains -d user -s "$KC" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
+          # self-signed certifikát bývá „nedůvěryhodný“, proto bez -v
+          echo "SIGN_ID=$(security find-identity -p codesigning "$KC" | awk '/\)/{print $2; exit}')" >> "$GITHUB_ENV"
+
+      - name: Podpis aplikace
+        run: |
+          APP_PATH="build/Build/Products/Release/$APP.app"
+          codesign --force --deep --sign "$SIGN_ID" "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+
+      - name: ZIP a DMG
+        run: |
+          APP_PATH="build/Build/Products/Release/$APP.app"
+          ditto -c -k --keepParent "$APP_PATH" "$APP-$VERSION.zip"
+          mkdir -p dist
+          cp -R "$APP_PATH" dist/
+          ln -s /Applications dist/Applications
+          hdiutil create -volname "$APP" -srcfolder dist -ov -format UDZO "$APP-$VERSION.dmg"
+
+      - name: EdDSA podpis a appcast
+        env:
+          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          if [ -z "$ED_KEY" ]; then echo "Chybí secret SPARKLE_ED_PRIVATE_KEY"; exit 1; fi
+          curl -fsSL -o sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          mkdir sparkle && tar -xf sparkle.tar.xz -C sparkle
+          umask 077
+          printf '%s' "$ED_KEY" > "$RUNNER_TEMP/ed.key"
+          SIG=$(sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/ed.key" "$APP-$VERSION.zip")
+          rm -f "$RUNNER_TEMP/ed.key"
+          python3 scripts/make_appcast.py \
+            --app "$APP" --version "$VERSION" --build "$BUILD" \
+            --repo "${{ github.repository }}" --tag "$GITHUB_REF_NAME" \
+            --zip "$APP-$VERSION.zip" --sign-output "$SIG" --min-os 14.0 --out appcast.xml
+          cat appcast.xml
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$APP-$VERSION.zip" "$APP-$VERSION.dmg" appcast.xml \
+            --title "$APP $VERSION" --generate-notes
