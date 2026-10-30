@@ -38,7 +38,7 @@ Jednorázové nastavení:
 1. `SUFeedURL` v `project.yml` už míří na `github.com/GliguroskiJ/NotchMax` (repozitář musí být veřejný, jinak se update nestáhne).
 2. Stáhni [Sparkle](https://github.com/sparkle-project/Sparkle/releases) a spusť `bin/generate_keys`. Vypíše **veřejný klíč**, ten vlož do `SUPublicEDKey` v `project.yml`.
 3. Privátní klíč exportuj `bin/generate_keys -x sparkle_private.key`, jeho obsah ulož do GitHub Secret **`SPARKLE_ED_PRIVATE_KEY`**, soubor smaž a zálohuj do správce hesel. Bez něj už nelze vydat update.
-4. Volitelné, ale doporučené: vytvoř v Přístupu k klíčence self-signed certifikát typu Code Signing (platnost 10+ let), exportuj `.p12` a ulož base64 do secretů `MACOS_CERT_P12` a `MACOS_CERT_PASSWORD`. Díky stabilnímu podpisu se po updatu neresetují oprávnění (Kalendář, Automatizace).
+4. Doporučené: spusť `bash scripts/create-signing-cert.sh`. Vytvoří self-signed certifikát, do schránky zkopíruje jeho base64 a vypíše heslo; obojí ulož do GitHub Secrets `MACOS_CERT_P12` a `MACOS_CERT_PASSWORD`. Díky stabilnímu podpisu se po aktualizaci neresetují oprávnění (Kalendář, Automatizace). Bez toho je build podepsaný ad-hoc a macOS po každé aktualizaci žádá o oprávnění znovu.
 
 Každé další vydání:
 

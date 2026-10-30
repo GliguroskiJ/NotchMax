@@ -2,10 +2,18 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.5
+Novinky
+- Klik na událost v kalendáři s odkazem na schůzku (Google Meet, Zoom, Teams) ji rovnou otevře; stejně funguje karta další schůzky na Přehledu
+- Blížící se schůzka: odpočet v minutách po straně notche posledních 5 minut a má přednost před hudbou i časovačem
+- Větší okno Nastavení se zaoblenými rohy
+- Aplikace už nemá ikonku v menu baru; Nastavení otevřeš ozubeným kolem v panelu nebo opětovným spuštěním aplikace
+- Stabilní podpis aplikace (návod v README), aby si macOS pamatoval oprávnění i po aktualizaci
+
 ## 0.1.4
 Novinky
 - Nastavení → Vzhled: posun notche nahoru nebo dolů o libovolný počet bodů a nastavení přesahu pod fyzický notch
-- Výchozí přesah pod notch je menší (2 px)
+- Výchozí poloha notche je posunutá o 2 px nahoru a přesah pod notch je 2 px, takže tvar sedí v rovině s fyzickým notchem
 - Záložky v hlavičce jsou jen ikonky, název už se nezobrazuje a nezasahuje pod notch
 
 ## 0.1.3

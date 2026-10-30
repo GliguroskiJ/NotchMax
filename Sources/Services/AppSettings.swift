@@ -95,7 +95,7 @@ final class AppSettings: ObservableObject {
             "tabShelf": true,
             "tabTools": true,
             "tabSystem": true,
-            "notchOffsetY": 0.0,
+            "notchOffsetY": 2.0,
             "notchOverhang": 2.0,
             "hotkeyEnabled": true,
             "shelfTTLHours": 24

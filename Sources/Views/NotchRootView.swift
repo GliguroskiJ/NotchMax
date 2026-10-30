@@ -20,6 +20,8 @@ struct NotchRootView: View {
     private let spring = Animation.spring(response: 0.52, dampingFraction: 0.84)
 
     private var activity: LiveActivity? {
+        // Blížící se schůzka (do 5 minut) má přednost před časovačem i hudbou, ať je odpočet vidět vždy.
+        if settings.liveCalendar, let m = calendar.minutesToNextMeeting, m <= 5 { return .meeting(m) }
         if settings.liveTimer, timer.isRunning { return .timer }
         if settings.liveMusic, media.isPlaying { return .music }
         if settings.liveCalendar, let m = calendar.minutesToNextMeeting, m <= 10 { return .meeting(m) }
@@ -58,6 +60,9 @@ struct NotchRootView: View {
     private var glow: GlowSpec? {
         guard settings.glowStyle != .off, !vm.isOpen else { return nil }
         let style = settings.glowStyle
+        if let m = calendar.minutesToNextMeeting, m <= 5, settings.liveCalendar {
+            return GlowSpec(color: .orange, style: .pulse, progress: nil)
+        }
         if timer.isRunning { return GlowSpec(color: settings.accent.color, style: style, progress: timer.progress) }
         if media.isPlaying { return GlowSpec(color: settings.accent.color, style: style, progress: nil) }
         if let m = calendar.minutesToNextMeeting, m <= 5 { return GlowSpec(color: .orange, style: .pulse, progress: nil) }
@@ -173,7 +178,7 @@ struct CompactActivity: View {
                 .contentTransition(.numericText())
                 .foregroundStyle(Color.white)
         case .meeting(let m):
-            Text("\(m) min")
+            Text(m <= 1 ? "1 min" : "\(m) min")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

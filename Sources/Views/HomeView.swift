@@ -145,6 +145,10 @@ struct NextEventCard: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .glassCard(padding: NotchLayout.spacingM)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if let url = calendar.nextMeeting?.joinURL { openURL(url) }
+            }
     }
 
     @ViewBuilder

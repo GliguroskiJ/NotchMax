@@ -119,6 +119,11 @@ struct CalendarView: View {
             RoundedRectangle(cornerRadius: NotchLayout.nestedRadius, style: .continuous)
                 .fill(Color.white.opacity(e.isDayLong ? 0.04 : 0.07))
         )
+        .contentShape(Rectangle())
+        // Klik na událost s odkazem na schůzku (Google Meet, Zoom, Teams…) ji rovnou otevře.
+        .onTapGesture {
+            if let url = e.joinURL { openURL(url) }
+        }
     }
 
     @ViewBuilder

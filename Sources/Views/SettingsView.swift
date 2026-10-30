@@ -54,22 +54,22 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             SettingsSidebar(selection: $selection)
-                .frame(width: 200)
+                .frame(width: 232)
                 .background(VisualEffectBackground())
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(selection.title)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(Color.white)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 28)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 34)
                     .padding(.bottom, 16)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     sectionContent
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 32)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .id(selection)
                         .transition(.opacity)
@@ -79,7 +79,7 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(white: 0.11))
         }
-        .frame(width: 680, height: 460)
+        .frame(width: 900, height: 620)
         .ignoresSafeArea()
         .animation(.smooth, value: selection)
         .preferredColorScheme(.dark)
@@ -104,7 +104,7 @@ private struct SidebarGroupTitle: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 12.5, weight: .semibold))
             .foregroundStyle(Color.white.opacity(0.4))
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -142,16 +142,16 @@ private struct SettingsSidebar: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(settings.accent.color.opacity(0.2))
                     Image(systemName: "capsule.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 13.5, weight: .bold))
                         .foregroundStyle(settings.accent.color)
                 }
                 .frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("NotchMax")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(Color.white)
                     Text("Verze \(shortVersion)")
-                        .font(.system(size: 11))
+                        .font(.system(size: 12.5))
                         .foregroundStyle(Color.white.opacity(0.45))
                 }
                 Spacer(minLength: 0)
@@ -174,11 +174,11 @@ private struct SidebarItem: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: section.symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(settings.accent.color)
                     .frame(width: 20)
                 Text(section.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14.5, weight: .medium))
                     .foregroundStyle(Color.white)
                 Spacer(minLength: 0)
             }
@@ -212,7 +212,7 @@ private struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             if let header {
                 Text(header.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.45))
                     .padding(.horizontal, 4)
             }
@@ -256,11 +256,11 @@ private struct SettingsRow<Trailing: View>: View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14.5))
                     .foregroundStyle(Color.white)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12.5))
                         .foregroundStyle(Color.white.opacity(0.5))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -296,11 +296,11 @@ private struct SettingsNote: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13.5, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.5))
                 .frame(width: 16)
             Text(text)
-                .font(.system(size: 11))
+                .font(.system(size: 12.5))
                 .foregroundStyle(Color.white.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -363,7 +363,7 @@ private struct GeneralSettings: View {
                             .tint(settings.accent.color)
                             .frame(width: 130)
                         Text(String(format: "%.2f s", settings.hoverDelay))
-                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .font(.system(size: 13.5, weight: .medium).monospacedDigit())
                             .foregroundStyle(Color.white.opacity(0.7))
                             .frame(width: 44, alignment: .trailing)
                     }
@@ -388,7 +388,7 @@ private struct GeneralSettings: View {
                 }
                 Spacer()
                 Text(versionText)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12.5))
                     .foregroundStyle(Color.white.opacity(0.4))
             }
             .padding(.horizontal, 4)
@@ -411,7 +411,7 @@ private struct AccentTile: View {
                     .frame(width: 22, height: 22)
                     .shadow(color: choice.color.opacity(isSelected ? 0.6 : 0), radius: 6)
                 Text(choice.title)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.65))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -481,7 +481,7 @@ private struct GlowTile: View {
             VStack(spacing: 8) {
                 GlowPreview(style: style, color: accent)
                 Text(style.title)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.65))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -540,7 +540,7 @@ private struct AppearanceSettings: View {
                             .tint(settings.accent.color)
                             .frame(width: 130)
                         Text(String(format: "%+.0f px", settings.notchOffsetY))
-                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .font(.system(size: 13.5, weight: .medium).monospacedDigit())
                             .foregroundStyle(Color.white.opacity(0.7))
                             .frame(width: 44, alignment: .trailing)
                     }
@@ -553,7 +553,7 @@ private struct AppearanceSettings: View {
                             .tint(settings.accent.color)
                             .frame(width: 130)
                         Text(String(format: "%.0f px", settings.notchOverhang))
-                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .font(.system(size: 13.5, weight: .medium).monospacedDigit())
                             .foregroundStyle(Color.white.opacity(0.7))
                             .frame(width: 44, alignment: .trailing)
                     }
@@ -561,7 +561,7 @@ private struct AppearanceSettings: View {
                 SettingsDivider()
                 SettingsRow(title: "Výchozí hodnoty") {
                     GlassPill(title: "Obnovit") {
-                        settings.notchOffsetY = 0
+                        settings.notchOffsetY = 2
                         settings.notchOverhang = 2
                     }
                 }
@@ -634,7 +634,7 @@ private struct CalendarSettings: View {
                             .fill(statusColor)
                             .frame(width: 8, height: 8)
                         Text(statusText)
-                            .font(.system(size: 12))
+                            .font(.system(size: 13.5))
                             .foregroundStyle(Color.white.opacity(0.7))
                     }
                 }
@@ -722,17 +722,17 @@ private struct UpdateSettings: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(settings.accent.color.opacity(0.18))
                         Image(systemName: "capsule.fill")
-                            .font(.system(size: 18, weight: .bold))
+                            .font(.system(size: 19.5, weight: .bold))
                             .foregroundStyle(settings.accent.color)
                     }
                     .frame(width: 44, height: 44)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("NotchMax \(shortVersion)")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 16.5, weight: .semibold))
                             .foregroundStyle(Color.white)
                         Text("Sestavení \(buildNumber)")
-                            .font(.system(size: 11))
+                            .font(.system(size: 12.5))
                             .foregroundStyle(Color.white.opacity(0.5))
                     }
                     Spacer(minLength: 8)
@@ -744,7 +744,7 @@ private struct UpdateSettings: View {
                 SettingsDivider()
                 SettingsRow(title: "Poslední kontrola") {
                     Text(lastCheckText)
-                        .font(.system(size: 12))
+                        .font(.system(size: 13.5))
                         .foregroundStyle(Color.white.opacity(0.7))
                 }
             }

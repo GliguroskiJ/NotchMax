@@ -5,10 +5,8 @@ struct NotchMaxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        MenuBarExtra("NotchMax", systemImage: "rectangle.topthird.inset.filled") {
-            MenuContent()
-        }
-
+        // Aplikace nemá ikonku v menu baru; Nastavení se otevírá ozubeným kolem v panelu notche.
+        Settings { EmptyView() }
     }
 }
 
@@ -16,6 +14,12 @@ struct NotchMaxApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchWindowController?
     private var screenObserver: NSObjectProtocol?
+
+    /// Opětovné spuštění aplikace (např. z Finderu) otevře Nastavení, protože aplikace nemá ikonku v menu baru.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openNotchMaxSettings()
+        return true
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Aplikace je jen v tmavé variantě (notch je černý).
@@ -51,6 +55,10 @@ final class SettingsWindowController {
     func show() {
         if window == nil {
             let host = NSHostingController(rootView: SettingsView().withServices())
+            host.view.wantsLayer = true
+            host.view.layer?.cornerRadius = 20
+            host.view.layer?.cornerCurve = .continuous
+            host.view.layer?.masksToBounds = true
             let w = NSWindow(contentViewController: host)
             w.title = "NotchMax"
             w.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
@@ -73,24 +81,4 @@ final class SettingsWindowController {
 @MainActor
 func openNotchMaxSettings() {
     SettingsWindowController.shared.show()
-}
-
-private struct MenuContent: View {
-    var body: some View {
-        Button("Nastavení…") { openNotchMaxSettings() }
-            .keyboardShortcut(",")
-
-        Button("Vyzkoušet animaci nabíjení") {
-            AppServices.shared.viewModel?.runChargeAnimation()
-        }
-
-        Button("Zkontrolovat aktualizace…") {
-            AppServices.shared.updates.checkNow()
-        }
-
-        Divider()
-
-        Button("Ukončit NotchMax") { NSApp.terminate(nil) }
-            .keyboardShortcut("q")
-    }
 }
