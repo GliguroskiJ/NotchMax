@@ -9,10 +9,6 @@ struct NotchMaxApp: App {
             MenuContent()
         }
 
-        Settings {
-            SettingsView()
-                .withServices()
-        }
     }
 }
 
@@ -46,11 +42,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Otevře okno Nastavení. Nezávisí na SwiftUI scéně, takže funguje i z panelu notche.
+/// Vlastní okno Nastavení. Scéna `Settings` z panelu bez fokusu spolehlivě neotevřela okno.
+@MainActor
+final class SettingsWindowController {
+    static let shared = SettingsWindowController()
+    private var window: NSWindow?
+
+    func show() {
+        if window == nil {
+            let host = NSHostingController(rootView: SettingsView().withServices())
+            let w = NSWindow(contentViewController: host)
+            w.title = "NotchMax"
+            w.styleMask = [.titled, .closable, .miniaturizable]
+            w.isReleasedWhenClosed = false
+            w.appearance = NSAppearance(named: .darkAqua)
+            w.center()
+            window = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+    }
+}
+
 @MainActor
 func openNotchMaxSettings() {
-    NSApp.activate(ignoringOtherApps: true)
-    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    SettingsWindowController.shared.show()
 }
 
 private struct MenuContent: View {

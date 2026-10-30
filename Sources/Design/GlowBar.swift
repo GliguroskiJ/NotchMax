@@ -42,23 +42,38 @@ struct GlowBar: View {
     }
 }
 
-/// Zelený „sweep“ kolem notche po zapojení nabíječky.
+/// Zelený „sweep“ kolem obrysu notche po zapojení nabíječky.
 struct ChargeSweep: View {
     @EnvironmentObject private var vm: NotchViewModel
     let top: CGFloat
     let bottom: CGFloat
 
     var body: some View {
-        NotchOutline(topRadius: top, bottomRadius: bottom)
-            .trim(from: 0, to: vm.chargeSweep)
-            .stroke(
-                LinearGradient(colors: [Color.green, Color.mint, Color.white],
-                               startPoint: .leading, endPoint: .trailing),
-                style: StrokeStyle(lineWidth: 2.4, lineCap: .round)
-            )
-            .shadow(color: Color.green.opacity(0.9), radius: 6)
-            .opacity(vm.chargeOpacity)
+        if let start = vm.chargeStart {
+            TimelineView(.animation) { context in
+                let e: Double = context.date.timeIntervalSince(start)
+                let draw: Double = min(max(e / 1.2, 0), 1)
+                let eased: Double = draw < 0.5 ? 2 * draw * draw : 1 - pow(-2 * draw + 2, 2) / 2
+                let fade: Double = e < 2.9 ? 1 : max(0, 1 - (e - 2.9) / 0.7)
+                let pulse: Double = 0.75 + 0.25 * sin(e * 6)
+                let outline = NotchOutline(topRadius: top, bottomRadius: bottom)
+                    .trim(from: 0, to: CGFloat(eased))
+                ZStack {
+                    outline
+                        .stroke(Color.green, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                        .blur(radius: 6)
+                        .opacity(0.75 * pulse)
+                    outline
+                        .stroke(
+                            LinearGradient(colors: [Color.green, Color.mint, Color.white],
+                                           startPoint: .leading, endPoint: .trailing),
+                            style: StrokeStyle(lineWidth: 2.4, lineCap: .round)
+                        )
+                }
+                .opacity(fade)
+            }
             .allowsHitTesting(false)
+        }
     }
 }
 

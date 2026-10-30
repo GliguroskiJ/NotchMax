@@ -32,9 +32,9 @@ final class NotchViewModel: ObservableObject {
     @Published var tab: NotchTab = .home
     @Published var geometry: NotchGeometry
     @Published var banner: Banner?
-    /// Průběh „sweepu“ kolem notche při zapojení nabíječky (0…1).
-    @Published var chargeSweep: CGFloat = 0
-    @Published var chargeOpacity: Double = 0
+    /// Začátek animace nabíjení (nil = neběží). Animaci kreslí TimelineView podle času,
+    /// takže nezávisí na SwiftUI přechodech a přehraje se při každém zapojení.
+    @Published var chargeStart: Date?
 
     private var chargeTask: Task<Void, Never>?
 
@@ -42,23 +42,17 @@ final class NotchViewModel: ObservableObject {
         self.geometry = geometry
     }
 
-    /// Animace po zapojení nabíječky: notch se rozšíří, kolem něj proběhne zelený sweep.
+    /// Animace po zapojení nabíječky: notch se lehce nafoukne a kolem jeho obrysu proběhne zelený sweep.
     func runChargeAnimation() {
         guard !isOpen else { return }
         chargeTask?.cancel()
-        chargeSweep = 0
-        chargeOpacity = 1
+        chargeStart = Date()
         withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) { banner = .charging }
         chargeTask = Task { [weak self] in
-            // Nech SwiftUI nejdřív vykreslit výchozí stav (0), jinak se sweep po prvním spuštění nepřehraje.
-            await Task.yield()
-            try? await Task.sleep(nanoseconds: 40_000_000)
+            try? await Task.sleep(nanoseconds: 3_600_000_000)
             guard !Task.isCancelled, let self else { return }
-            withAnimation(.easeInOut(duration: 1.3)) { self.chargeSweep = 1 }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { self.banner = nil }
-            withAnimation(.easeOut(duration: 0.7)) { self.chargeOpacity = 0 }
+            self.chargeStart = nil
         }
     }
 }

@@ -15,6 +15,7 @@ final class BatteryMonitor: ObservableObject {
     var onUnplug: (() -> Void)?
 
     private var source: CFRunLoopSource?
+    private var pollTimer: Timer?
 
     init() {
         refresh(initial: true)
@@ -32,6 +33,13 @@ final class BatteryMonitor: ObservableObject {
         let src = unmanaged.takeRetainedValue()
         CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
         source = src
+
+        // Záloha: systémové notifikace o napájení se občas sloučí nebo zmeškají.
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     func refresh(initial: Bool = false) {

@@ -25,17 +25,17 @@ struct FallbackGlass<S: InsettableShape>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(shape.fill(Color.white.opacity(reduceTransparency ? 0.18 : 0.08)))
+            .background(shape.fill(Color.white.opacity(reduceTransparency ? 0.2 : 0.11)))
             .background(shape.fill(tint ?? Color.clear))
             .overlay(
                 shape.fill(
-                    LinearGradient(colors: [Color.white.opacity(0.16), Color.white.opacity(0)],
+                    LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0)],
                                    startPoint: .top, endPoint: .center)
                 )
             )
             .overlay(
                 shape.strokeBorder(
-                    LinearGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0.06)],
+                    LinearGradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.08)],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
                     lineWidth: 0.75
                 )
@@ -63,15 +63,13 @@ extension View {
         }
     }
 
-    /// Matná karta pro větší plochy (sklo na velkých plochách na černé vypadá jako šedý kal).
+    /// Karta z Liquid Glass (na macOS 26 nativní sklo, jinak fallback).
     func cardStyle() -> some View {
         self
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-            )
+            .notchGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                        tint: Color.white.opacity(0.05))
     }
 }
 
