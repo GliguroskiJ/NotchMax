@@ -15,7 +15,7 @@ struct NotchRootView: View {
     @EnvironmentObject private var calendar: CalendarMonitor
     @EnvironmentObject private var timer: FocusTimer
 
-    private let spring = Animation.spring(response: 0.45, dampingFraction: 0.8)
+    private let spring = Animation.spring(response: 0.52, dampingFraction: 0.84)
 
     private var activity: LiveActivity? {
         if settings.liveTimer, timer.isRunning { return .timer }
@@ -91,7 +91,12 @@ struct NotchRootView: View {
     private var content: some View {
         if vm.isOpen {
             OpenPanel()
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                .transition(.asymmetric(
+                    insertion: AnyTransition.opacity
+                        .combined(with: .scale(scale: 0.94, anchor: .top))
+                        .animation(.smooth(duration: 0.38).delay(0.1)),
+                    removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+                ))
         } else if vm.banner == nil, let a = activity {
             CompactActivity(activity: a)
                 .frame(height: vm.geometry.notchSize.height)
@@ -171,8 +176,7 @@ struct OpenPanel: View {
     /// Horní rohy tvaru se rozšiřují ven, takže tělo je užší o poloměr na každé straně.
     private var sideInset: CGFloat { NotchLayout.sideInset }
 
-    private var headerHeight: CGFloat { max(vm.geometry.notchSize.height, 32) }
-
+    
     private var cardTransition: AnyTransition {
         .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
     }
@@ -184,7 +188,8 @@ struct OpenPanel: View {
                 Spacer(minLength: vm.geometry.notchSize.width + 16)
                 statusCluster
             }
-            .frame(height: headerHeight)
+            .frame(height: NotchLayout.controlHeight)
+            .padding(.top, NotchLayout.margin)
             .padding(.horizontal, sideInset)
 
             ZStack {
@@ -217,27 +222,32 @@ struct OpenPanel: View {
     /// ale dost tmavé, aby karty měly kontrast.
     private var ambient: some View {
         let hasArt = media.artwork != nil && media.isPlaying
-        return ZStack {
-            Color.black
-            if hasArt, let art = media.artwork {
-                Image(nsImage: art)
-                    .resizable()
-                    .scaledToFill()
-                    .blur(radius: 60)
-                    .saturation(0.7)
-                    .opacity(0.32)
-                Color.black.opacity(0.35)
-            } else {
-                RadialGradient(colors: [settings.accent.color.opacity(0.2), Color.clear],
-                               center: .bottomLeading, startRadius: 0, endRadius: 300)
-                RadialGradient(colors: [Color.purple.opacity(0.12), Color.clear],
-                               center: .bottomTrailing, startRadius: 0, endRadius: 260)
+        return GeometryReader { geo in
+            ZStack {
+                Color.black
+                if hasArt, let art = media.artwork {
+                    Image(nsImage: art)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .blur(radius: 40)
+                        .saturation(0.7)
+                        .opacity(0.32)
+                        .clipped()
+                    Color.black.opacity(0.35)
+                } else {
+                    RadialGradient(colors: [settings.accent.color.opacity(0.2), Color.clear],
+                                   center: .bottomLeading, startRadius: 0, endRadius: 300)
+                    RadialGradient(colors: [Color.purple.opacity(0.12), Color.clear],
+                                   center: .bottomTrailing, startRadius: 0, endRadius: 260)
+                }
+                // Hlavička zůstává na čisté černé (splývá s notchem), světlo sílí směrem dolů.
+                LinearGradient(colors: [Color.black, Color.black.opacity(0)],
+                               startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.4))
             }
-            // Hlavička zůstává na čisté černé (splývá s notchem), světlo sílí směrem dolů.
-            LinearGradient(colors: [Color.black, Color.black.opacity(0)],
-                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.4))
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
-        .clipped()
         .animation(.smooth(duration: 0.6), value: hasArt)
     }
 

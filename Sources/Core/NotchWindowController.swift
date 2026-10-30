@@ -26,6 +26,8 @@ final class NotchWindowController {
             .withServices()
         let hosting = NSHostingView(rootView: root)
         hosting.sizingOptions = []
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
         hosting.frame = NSRect(origin: .zero, size: NotchLayout.panelSize)
         panel.contentView = hosting
 
