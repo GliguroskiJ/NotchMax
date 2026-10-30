@@ -331,23 +331,13 @@ private struct TabButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: tab.symbol)
-                    .font(.system(size: 12, weight: .semibold))
-                if active {
-                    Text(tab.title)
-                        .font(.system(size: 11, weight: .semibold))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .transition(.opacity)
-                }
-            }
-            .foregroundStyle(foreground)
-            .padding(.horizontal, active ? 10 : 0)
-            .frame(minWidth: 28)
-            .frame(height: NotchLayout.controlHeight - 6)
-            .background { indicator }
-            .contentShape(Capsule())
+            Image(systemName: tab.symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 32)
+                .foregroundStyle(foreground)
+                .frame(height: NotchLayout.controlHeight - 6)
+                .background { indicator }
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

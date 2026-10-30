@@ -6,6 +6,7 @@ Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přid
 Novinky
 - Nastavení → Vzhled: posun notche nahoru nebo dolů o libovolný počet bodů a nastavení přesahu pod fyzický notch
 - Výchozí přesah pod notch je menší (2 px)
+- Záložky v hlavičce jsou jen ikonky, název už se nezobrazuje a nezasahuje pod notch
 
 ## 0.1.3
 Novinky
