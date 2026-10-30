@@ -31,8 +31,8 @@ struct NotchRootView: View {
         let n = vm.geometry.notchSize
         if vm.isOpen { return NotchLayout.openSize }
         // Tvar vždy kousek přesahuje pod fyzický notch (lip), aby byl obrys vidět.
-        let h = n.height + NotchLayout.lip
-        if vm.banner != nil { return CGSize(width: n.width + 12 + 22, height: h + 5) }
+        let h = n.height + CGFloat(settings.notchOverhang)
+        if vm.banner != nil { return CGSize(width: n.width + 12 + 22, height: h + 4) }
         // Hudba potřebuje po stranách jen malou ikonu; časovač a schůzka víc místa na text.
         var extra: CGFloat = 0
         if let a = activity {

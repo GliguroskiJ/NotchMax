@@ -60,7 +60,7 @@ final class NotchWindowController {
         let size = NotchLayout.panelSize
         let f = screen.frame
         panel.setFrame(
-            NSRect(x: f.midX - size.width / 2, y: f.maxY - size.height, width: size.width, height: size.height),
+            NSRect(x: f.midX - size.width / 2, y: f.maxY - size.height + CGFloat(services.settings.notchOffsetY), width: size.width, height: size.height),
             display: true
         )
     }
@@ -76,6 +76,11 @@ final class NotchWindowController {
             .sink { [weak self] choice in self?.position(for: choice) }
             .store(in: &cancellables)
 
+        services.settings.$notchOffsetY
+            .dropFirst()
+            .sink { [weak self] value in self?.applyOffset(value) }
+            .store(in: &cancellables)
+
         services.settings.$hotkeyEnabled
             .sink { [weak self] enabled in self?.configureHotKey(enabled: enabled) }
             .store(in: &cancellables)
@@ -84,6 +89,16 @@ final class NotchWindowController {
             guard let self, self.services.settings.chargingAnimation else { return }
             self.vm.runChargeAnimation()
         }
+    }
+
+    /// `@Published` emituje před zápisem hodnoty, proto se nová hodnota předává explicitně.
+    private func applyOffset(_ value: Double) {
+        let size = NotchLayout.panelSize
+        let f = vm.geometry.screen.frame
+        panel.setFrame(
+            NSRect(x: f.midX - size.width / 2, y: f.maxY - size.height + CGFloat(value), width: size.width, height: size.height),
+            display: true
+        )
     }
 
     // MARK: - Globální zkratka
@@ -119,7 +134,7 @@ final class NotchWindowController {
         let n = vm.geometry.notchSize
         let w = n.width + 2 * NotchLayout.sideActivityText + 24
         return CGRect(x: screenFrame.midX - w / 2,
-                      y: screenFrame.maxY - n.height - 2,
+                      y: screenFrame.maxY - n.height - 2 + CGFloat(services.settings.notchOffsetY),
                       width: w,
                       height: n.height + 8)
     }

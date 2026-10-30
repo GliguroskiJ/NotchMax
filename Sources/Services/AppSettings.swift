@@ -72,6 +72,10 @@ final class AppSettings: ObservableObject {
     @Published var tabTools: Bool { didSet { UserDefaults.standard.set(tabTools, forKey: "tabTools") } }
     @Published var tabSystem: Bool { didSet { UserDefaults.standard.set(tabSystem, forKey: "tabSystem") } }
     @Published var hotkeyEnabled: Bool { didSet { UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled") } }
+    /// Posun notche v bodech: kladná hodnota = nahoru, záporná = dolů.
+    @Published var notchOffsetY: Double { didSet { UserDefaults.standard.set(notchOffsetY, forKey: "notchOffsetY") } }
+    /// O kolik tvar přesahuje pod fyzický notch (0 = přesně na výšku notche).
+    @Published var notchOverhang: Double { didSet { UserDefaults.standard.set(notchOverhang, forKey: "notchOverhang") } }
     /// 0 = nikdy nemazat
     @Published var shelfTTLHours: Int { didSet { UserDefaults.standard.set(shelfTTLHours, forKey: "shelfTTLHours") } }
 
@@ -91,6 +95,8 @@ final class AppSettings: ObservableObject {
             "tabShelf": true,
             "tabTools": true,
             "tabSystem": true,
+            "notchOffsetY": 0.0,
+            "notchOverhang": 2.0,
             "hotkeyEnabled": true,
             "shelfTTLHours": 24
         ])
@@ -107,6 +113,8 @@ final class AppSettings: ObservableObject {
         tabShelf = d.bool(forKey: "tabShelf")
         tabTools = d.bool(forKey: "tabTools")
         tabSystem = d.bool(forKey: "tabSystem")
+        notchOffsetY = d.double(forKey: "notchOffsetY")
+        notchOverhang = d.double(forKey: "notchOverhang")
         hotkeyEnabled = d.bool(forKey: "hotkeyEnabled")
         shelfTTLHours = d.integer(forKey: "shelfTTLHours")
     }

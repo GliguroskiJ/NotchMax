@@ -2,7 +2,12 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
-## 0.1.2
+## 0.1.4
+Novinky
+- Nastavení → Vzhled: posun notche nahoru nebo dolů o libovolný počet bodů a nastavení přesahu pod fyzický notch
+- Výchozí přesah pod notch je menší (2 px)
+
+## 0.1.3
 Novinky
 - Záložka Systém: statistiky CPU, paměti, sítě a disku a počasí (Open-Meteo)
 - Záložka Nástroje: časovač, spouštěč Zkratek a rychlé poznámky
@@ -14,6 +19,9 @@ Novinky
 
 Opravy
 - Rámeček pod notchem při změně skladby
+
+## 0.1.2
+- Víc místa nad ikonami v hlavičce panelu, plynulejší rozbalení a užší živé aktivity po stranách
 
 ## 0.1.1
 Novinky

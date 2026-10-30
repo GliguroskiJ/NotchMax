@@ -532,6 +532,41 @@ private struct AppearanceSettings: View {
                 .padding(.vertical, 12)
             }
 
+            SettingsCard(header: "Poloha a velikost notche") {
+                SettingsRow(title: "Posun nahoru / dolů",
+                            subtitle: "Doladění, aby tvar přesně seděl na fyzický notch. Kladná hodnota posune nahoru.") {
+                    HStack(spacing: 10) {
+                        Slider(value: $settings.notchOffsetY, in: -12...12, step: 1)
+                            .tint(settings.accent.color)
+                            .frame(width: 130)
+                        Text(String(format: "%+.0f px", settings.notchOffsetY))
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Color.white.opacity(0.7))
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+                SettingsDivider()
+                SettingsRow(title: "Přesah pod notch",
+                            subtitle: "O kolik tvar vyčnívá pod fyzický notch. 0 = přesně na jeho výšku.") {
+                    HStack(spacing: 10) {
+                        Slider(value: $settings.notchOverhang, in: 0...10, step: 1)
+                            .tint(settings.accent.color)
+                            .frame(width: 130)
+                        Text(String(format: "%.0f px", settings.notchOverhang))
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Color.white.opacity(0.7))
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+                SettingsDivider()
+                SettingsRow(title: "Výchozí hodnoty") {
+                    GlassPill(title: "Obnovit") {
+                        settings.notchOffsetY = 0
+                        settings.notchOverhang = 2
+                    }
+                }
+            }
+
             SettingsCard(header: "Nabíjení") {
                 SettingsToggleRow(title: "Animace při zapojení nabíječky",
                                   isOn: $settings.chargingAnimation)
