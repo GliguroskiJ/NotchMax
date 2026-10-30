@@ -28,9 +28,11 @@ enum NotchLayout {
     /// Pevná velikost průhledného okna (obsahuje i prostor pro glow a stín).
     static let panelSize = CGSize(width: 720, height: 320)
     /// Velikost rozbaleného notche.
-    static let openSize = CGSize(width: 580, height: 252)
+    static let openSize = CGSize(width: 620, height: 252)
     /// Šířka jedné strany „live activity“ vedle notche.
-    static let sideActivity: CGFloat = 46
+    static let sideActivity: CGFloat = 26
+    /// Širší strany pro živou aktivitu s textem (časovač, schůzka).
+    static let sideActivityText: CGFloat = 40
     /// O kolik tvar vyčnívá pod fyzický notch, aby byl obrys a glow vidět.
     static let lip: CGFloat = 5
 

@@ -70,6 +70,8 @@ final class AppSettings: ObservableObject {
     @Published var tabCalendar: Bool { didSet { UserDefaults.standard.set(tabCalendar, forKey: "tabCalendar") } }
     @Published var tabShelf: Bool { didSet { UserDefaults.standard.set(tabShelf, forKey: "tabShelf") } }
     @Published var tabTools: Bool { didSet { UserDefaults.standard.set(tabTools, forKey: "tabTools") } }
+    @Published var tabSystem: Bool { didSet { UserDefaults.standard.set(tabSystem, forKey: "tabSystem") } }
+    @Published var hotkeyEnabled: Bool { didSet { UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled") } }
     /// 0 = nikdy nemazat
     @Published var shelfTTLHours: Int { didSet { UserDefaults.standard.set(shelfTTLHours, forKey: "shelfTTLHours") } }
 
@@ -88,6 +90,8 @@ final class AppSettings: ObservableObject {
             "tabCalendar": true,
             "tabShelf": true,
             "tabTools": true,
+            "tabSystem": true,
+            "hotkeyEnabled": true,
             "shelfTTLHours": 24
         ])
         hoverDelay = d.double(forKey: "hoverDelay")
@@ -102,6 +106,8 @@ final class AppSettings: ObservableObject {
         tabCalendar = d.bool(forKey: "tabCalendar")
         tabShelf = d.bool(forKey: "tabShelf")
         tabTools = d.bool(forKey: "tabTools")
+        tabSystem = d.bool(forKey: "tabSystem")
+        hotkeyEnabled = d.bool(forKey: "hotkeyEnabled")
         shelfTTLHours = d.integer(forKey: "shelfTTLHours")
     }
 
@@ -110,6 +116,7 @@ final class AppSettings: ObservableObject {
         if tabCalendar { tabs.append(.calendar) }
         if tabShelf { tabs.append(.shelf) }
         if tabTools { tabs.append(.tools) }
+        if tabSystem { tabs.append(.system) }
         return tabs
     }
 }

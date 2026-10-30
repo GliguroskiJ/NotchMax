@@ -4,6 +4,7 @@ enum LiveActivity: Equatable {
     case timer
     case music
     case meeting(Int)
+    case privacy
 }
 
 /// Kořen notche: černý tvar, glow, live activity vedle notche, rozbalený panel.
@@ -14,6 +15,7 @@ struct NotchRootView: View {
     @EnvironmentObject private var media: MediaMonitor
     @EnvironmentObject private var calendar: CalendarMonitor
     @EnvironmentObject private var timer: FocusTimer
+    @ObservedObject private var privacy = PrivacyMonitor.shared
 
     private let spring = Animation.spring(response: 0.52, dampingFraction: 0.84)
 
@@ -21,6 +23,7 @@ struct NotchRootView: View {
         if settings.liveTimer, timer.isRunning { return .timer }
         if settings.liveMusic, media.isPlaying { return .music }
         if settings.liveCalendar, let m = calendar.minutesToNextMeeting, m <= 10 { return .meeting(m) }
+        if privacy.micActive || privacy.cameraActive { return .privacy }
         return nil
     }
 
@@ -30,7 +33,13 @@ struct NotchRootView: View {
         // Tvar vždy kousek přesahuje pod fyzický notch (lip), aby byl obrys vidět.
         let h = n.height + NotchLayout.lip
         if vm.banner != nil { return CGSize(width: n.width + 12 + 22, height: h + 5) }
-        let extra: CGFloat = activity == nil ? 0 : NotchLayout.sideActivity * 2
+        // Hudba potřebuje po stranách jen malou ikonu; časovač a schůzka víc místa na text.
+        var extra: CGFloat = 0
+        if let a = activity {
+            var side = (a == .music || a == .privacy) ? NotchLayout.sideActivity : NotchLayout.sideActivityText
+            if a != .privacy, privacy.micActive || privacy.cameraActive { side += 12 }
+            extra = side * 2
+        }
         return CGSize(width: n.width + 12 + extra, height: h)
     }
 
@@ -121,7 +130,7 @@ struct CompactActivity: View {
             Spacer(minLength: 0)
             right
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 9)
     }
 
     @ViewBuilder private var left: some View {
@@ -131,7 +140,7 @@ struct CompactActivity: View {
                 Image(nsImage: art)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 20, height: 20)
+                    .frame(width: 18, height: 18)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     .shadow(color: Color.black.opacity(0.4), radius: 2, x: 0, y: 1)
             } else {
@@ -141,10 +150,19 @@ struct CompactActivity: View {
             Image(systemName: "timer").font(.system(size: 12, weight: .semibold)).foregroundStyle(settings.accent.color)
         case .meeting:
             Image(systemName: "calendar").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.orange)
+        case .privacy:
+            EmptyView()
         }
     }
 
-    @ViewBuilder private var right: some View {
+    private var right: some View {
+        HStack(spacing: 5) {
+            PrivacyDots()
+            rightContent
+        }
+    }
+
+    @ViewBuilder private var rightContent: some View {
         switch activity {
         case .music:
             EqualizerBars(color: settings.accent.color, active: media.isPlaying)
@@ -160,6 +178,8 @@ struct CompactActivity: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .foregroundStyle(Color.orange)
+        case .privacy:
+            EmptyView()
         }
     }
 }
@@ -214,7 +234,8 @@ struct OpenPanel: View {
         case .home: HomeView().transition(cardTransition)
         case .calendar: CalendarView().transition(cardTransition)
         case .shelf: ShelfView().transition(cardTransition)
-        case .tools: ToolsView().transition(cardTransition)
+        case .tools: ToolsHubView().transition(cardTransition)
+        case .system: SystemHubView().transition(cardTransition)
         }
     }
 

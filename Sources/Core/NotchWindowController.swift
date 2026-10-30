@@ -76,9 +76,38 @@ final class NotchWindowController {
             .sink { [weak self] choice in self?.position(for: choice) }
             .store(in: &cancellables)
 
+        services.settings.$hotkeyEnabled
+            .sink { [weak self] enabled in self?.configureHotKey(enabled: enabled) }
+            .store(in: &cancellables)
+
         services.battery.onPlugIn = { [weak self] in
             guard let self, self.services.settings.chargingAnimation else { return }
             self.vm.runChargeAnimation()
+        }
+    }
+
+    // MARK: - Globální zkratka
+
+    private var openedByHotKey = false
+
+    private func configureHotKey(enabled: Bool) {
+        if enabled {
+            GlobalHotKey.shared.register(keyCode: GlobalHotKey.defaultKeyCode,
+                                         modifiers: GlobalHotKey.defaultModifiers) { [weak self] in
+                self?.toggleFromHotKey()
+            }
+        } else {
+            GlobalHotKey.shared.unregister()
+        }
+    }
+
+    private func toggleFromHotKey() {
+        if vm.isOpen {
+            openedByHotKey = false
+            close()
+        } else {
+            open()
+            openedByHotKey = true
         }
     }
 
@@ -88,7 +117,7 @@ final class NotchWindowController {
 
     private func closedHotRect() -> CGRect {
         let n = vm.geometry.notchSize
-        let w = n.width + 2 * NotchLayout.sideActivity + 24
+        let w = n.width + 2 * NotchLayout.sideActivityText + 24
         return CGRect(x: screenFrame.midX - w / 2,
                       y: screenFrame.maxY - n.height - 2,
                       width: w,
@@ -134,6 +163,11 @@ final class NotchWindowController {
     private func handleMouse(dragging: Bool) {
         let p = NSEvent.mouseLocation
         if vm.isOpen {
+            // Otevřeno zkratkou: nezavírat, dokud myš nevjede do panelu.
+            if openedByHotKey {
+                if openRect().contains(p) { openedByHotKey = false }
+                return
+            }
             if openRect().insetBy(dx: -24, dy: -24).contains(p) {
                 cancelClose()
             } else {
@@ -188,7 +222,7 @@ final class NotchWindowController {
             try? await Task.sleep(nanoseconds: 280_000_000)
             guard !Task.isCancelled, let self else { return }
             // Během držení tlačítka myši (tažení souboru ven) se nezavírá.
-            if NSEvent.pressedMouseButtons & 1 != 0 {
+            if NSEvent.pressedMouseButtons & 1 != 0 || self.vm.holdOpen {
                 self.closeTask = nil
                 return
             }
@@ -203,6 +237,7 @@ final class NotchWindowController {
 
     private func close() {
         closeTask = nil
+        openedByHotKey = false
         withAnimation(spring) { vm.isOpen = false }
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 450_000_000)

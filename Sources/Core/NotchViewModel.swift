@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum NotchTab: String, CaseIterable, Identifiable {
-    case home, calendar, shelf, tools
+    case home, calendar, shelf, tools, system
 
     var id: String { rawValue }
 
@@ -10,7 +10,8 @@ enum NotchTab: String, CaseIterable, Identifiable {
         case .home: return "house.fill"
         case .calendar: return "calendar"
         case .shelf: return "tray.full.fill"
-        case .tools: return "timer"
+        case .tools: return "wrench.and.screwdriver.fill"
+        case .system: return "gauge.with.dots.needle.67percent"
         }
     }
 
@@ -20,6 +21,7 @@ enum NotchTab: String, CaseIterable, Identifiable {
         case .calendar: return "Kalendář"
         case .shelf: return "Odkladiště"
         case .tools: return "Nástroje"
+        case .system: return "Systém"
         }
     }
 }
@@ -29,6 +31,8 @@ final class NotchViewModel: ObservableObject {
     enum Banner: Equatable { case charging }
 
     @Published var isOpen = false
+    /// Dokud je true (např. při psaní poznámky), se panel nezavře po odjetí myši.
+    @Published var holdOpen = false
     @Published var tab: NotchTab = .home
     @Published var geometry: NotchGeometry
     @Published var banner: Banner?

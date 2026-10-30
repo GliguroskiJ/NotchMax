@@ -23,7 +23,8 @@ final class NotchPanel: NSPanel {
         ignoresMouseEvents = true
     }
 
-    override var canBecomeKey: Bool { false }
+    /// Panel bez aktivace aplikace, ale s možností psát do textových polí (poznámky, město).
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     /// Systém by jinak okno posunul pod menu bar.

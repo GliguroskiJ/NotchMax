@@ -341,6 +341,10 @@ private struct GeneralSettings: View {
                                   subtitle: "NotchMax se spustí automaticky po přihlášení k Macu.",
                                   isOn: launchBinding)
                 SettingsDivider()
+                SettingsToggleRow(title: "Globální zkratka ⌥⌘N",
+                                  subtitle: "Otevře a zavře notch z klávesnice.",
+                                  isOn: $settings.hotkeyEnabled)
+                SettingsDivider()
                 SettingsRow(title: "Zobrazit na") {
                     Picker("", selection: $settings.display) {
                         ForEach(DisplayChoice.allCases) { Text($0.title).tag($0) }
@@ -573,7 +577,9 @@ private struct ModulesSettings: View {
                 SettingsDivider()
                 SettingsToggleRow(title: "Odkladiště souborů", isOn: $settings.tabShelf)
                 SettingsDivider()
-                SettingsToggleRow(title: "Nástroje", isOn: $settings.tabTools)
+                SettingsToggleRow(title: "Nástroje", subtitle: "Časovač, Zkratky a rychlé poznámky.", isOn: $settings.tabTools)
+                SettingsDivider()
+                SettingsToggleRow(title: "Systém", subtitle: "Statistiky CPU, paměti, sítě a počasí.", isOn: $settings.tabSystem)
             }
         }
     }
