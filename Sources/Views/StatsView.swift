@@ -98,7 +98,7 @@ struct StatsView: View {
             }
             .frame(maxHeight: .infinity)
         }
-        .cardStyle()
+        .glassCard(padding: NotchLayout.spacingM)
     }
 
     private var memoryCard: some View {
@@ -118,7 +118,7 @@ struct StatsView: View {
             .lineLimit(1)
             ThinProgress(value: stats.memoryUsedFraction, tint: tint)
         }
-        .cardStyle()
+        .glassCard(padding: NotchLayout.spacingM)
     }
 
     private var networkCard: some View {
@@ -135,7 +135,7 @@ struct StatsView: View {
             }
             .frame(maxHeight: .infinity)
         }
-        .cardStyle()
+        .glassCard(padding: NotchLayout.spacingM)
     }
 
     private var diskCard: some View {
@@ -156,7 +156,7 @@ struct StatsView: View {
             .minimumScaleFactor(0.8)
             ThinProgress(value: diskUsedFraction, tint: tint)
         }
-        .cardStyle()
+        .glassCard(padding: NotchLayout.spacingM)
     }
 
     private func rateRow(symbol: String, value: Double) -> some View {

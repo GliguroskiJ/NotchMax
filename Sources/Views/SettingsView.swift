@@ -39,7 +39,21 @@ private struct VisualEffectBackground: NSViewRepresentable {
         view.blendingMode = .behindWindow
         view.state = .active
         view.appearance = NSAppearance(named: .darkAqua)
+        view.maskImage = Self.roundedMask(radius: 20)
         return view
+    }
+
+    /// Roztažitelná maska se zaoblenými rohy, aby rozmazání respektovalo tvar okna.
+    private static func roundedMask(radius: CGFloat) -> NSImage {
+        let edge = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
     }
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
@@ -55,7 +69,6 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             SettingsSidebar(selection: $selection)
                 .frame(width: 232)
-                .background(VisualEffectBackground())
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(selection.title)
@@ -80,6 +93,7 @@ struct SettingsView: View {
             .background(Color(white: 0.11))
         }
         .frame(width: 900, height: 620)
+        .background(VisualEffectBackground())
         .ignoresSafeArea()
         .animation(.smooth, value: selection)
         .preferredColorScheme(.dark)

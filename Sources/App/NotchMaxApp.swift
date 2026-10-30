@@ -15,12 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchWindowController?
     private var screenObserver: NSObjectProtocol?
 
-    /// Opětovné spuštění aplikace (např. z Finderu) otevře Nastavení, protože aplikace nemá ikonku v menu baru.
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openNotchMaxSettings()
-        return true
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Aplikace je jen v tmavé variantě (notch je černý).
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -54,14 +48,27 @@ final class SettingsWindowController {
 
     func show() {
         if window == nil {
-            let host = NSHostingController(rootView: SettingsView().withServices())
-            host.view.wantsLayer = true
-            host.view.layer?.cornerRadius = 20
-            host.view.layer?.cornerCurve = .continuous
-            host.view.layer?.masksToBounds = true
-            let w = NSWindow(contentViewController: host)
+            let size = NSSize(width: 900, height: 620)
+            let hosting = NSHostingView(rootView: SettingsView().withServices())
+            hosting.sizingOptions = []
+            // Zaoblené rohy celého okna zajistí maska na kontejneru (průhledné okno nemá systémové rohy).
+            let container = NSView(frame: NSRect(origin: .zero, size: size))
+            container.wantsLayer = true
+            container.layer?.cornerRadius = 20
+            container.layer?.cornerCurve = .continuous
+            container.layer?.masksToBounds = true
+            hosting.frame = container.bounds
+            hosting.autoresizingMask = [.width, .height]
+            container.addSubview(hosting)
+
+            let w = NSWindow(
+                contentRect: NSRect(origin: .zero, size: size),
+                styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            w.contentView = container
             w.title = "NotchMax"
-            w.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             w.titleVisibility = .hidden
             w.titlebarAppearsTransparent = true
             w.isMovableByWindowBackground = true

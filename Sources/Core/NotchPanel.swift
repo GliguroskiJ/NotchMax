@@ -23,8 +23,33 @@ final class NotchPanel: NSPanel {
         ignoresMouseEvents = true
     }
 
-    /// Panel bez aktivace aplikace, ale s možností psát do textových polí (poznámky, město).
-    override var canBecomeKey: Bool { true }
+    /// Klíčovým oknem se panel stává jen na dobu psaní do textového pole. Klíčové okno totiž
+    /// přepíná Liquid Glass do „aktivního“ vzhledu (světlejší, šedé), a ten nechceme.
+    private var allowsKey = false
+    override var canBecomeKey: Bool { allowsKey }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, !isKeyWindow,
+           let hit = contentView?.hitTest(event.locationInWindow), Self.isTextInput(hit) {
+            allowsKey = true
+            makeKey()
+        }
+        super.sendEvent(event)
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        allowsKey = false
+    }
+
+    private static func isTextInput(_ view: NSView) -> Bool {
+        var v: NSView? = view
+        while let cur = v {
+            if cur is NSTextView || cur is NSTextField { return true }
+            v = cur.superview
+        }
+        return false
+    }
     override var canBecomeMain: Bool { false }
 
     /// Systém by jinak okno posunul pod menu bar.

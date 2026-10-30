@@ -224,8 +224,10 @@ struct OpenPanel: View {
             .padding(.horizontal, sideInset)
             .padding(.top, NotchLayout.spacingS)
             .padding(.bottom, NotchLayout.margin)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipped()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(ambient)
         .onChange(of: settings.visibleTabs) { _, tabs in
             // Když uživatel vypne právě zobrazenou záložku, vrátit se na Přehled.

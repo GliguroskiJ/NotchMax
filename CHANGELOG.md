@@ -2,6 +2,18 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.7
+Opravy
+- Okno Nastavení se už samo neotevírá po spuštění ani po aktualizaci
+- Okno Nastavení má zaoblené všechny rohy
+- Notch zůstává Liquid Glass i po kliknutí (panel už nepřepíná sklo do světlého „aktivního“ vzhledu)
+- Záložky Systém a Nástroje už neposouvají horní lištu nahoru nebo dolů
+
+## 0.1.6
+Opravy
+- Okno Nastavení se už samo neotevírá po spuštění ani po aktualizaci
+- Okno Nastavení má zaoblené všechny rohy
+
 ## 0.1.5
 Novinky
 - Klik na událost v kalendáři s odkazem na schůzku (Google Meet, Zoom, Teams) ji rovnou otevře; stejně funguje karta další schůzky na Přehledu
