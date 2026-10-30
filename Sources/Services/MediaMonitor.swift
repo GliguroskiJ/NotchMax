@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 enum MediaSource {
     case music, spotify

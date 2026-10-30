@@ -65,11 +65,36 @@ extension View {
 
     /// Karta z Liquid Glass (na macOS 26 nativní sklo, jinak fallback).
     func cardStyle() -> some View {
-        self
-            .padding(14)
+        glassCard(padding: NotchLayout.spacingL)
+    }
+
+    /// Karta s jednotným poloměrem (soustředným k tvaru panelu), tmavou podložkou pro kontrast
+    /// a jemným světlým obrysem. `padding` je vnitřní odsazení obsahu.
+    func glassCard(padding: CGFloat = NotchLayout.spacingL) -> some View {
+        let shape = RoundedRectangle(cornerRadius: NotchLayout.cardRadius, style: .continuous)
+        return self
+            .padding(padding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .notchGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous),
-                        tint: Color.white.opacity(0.05))
+            .notchGlass(in: shape, tint: Color.white.opacity(0.06))
+            .background(shape.fill(Color.black.opacity(0.28)))
+            .overlay(shape.strokeBorder(Color.white.opacity(0.09), lineWidth: 0.75))
+    }
+
+    /// Jemné zvětšení při najetí myší.
+    func hoverScale(_ scale: CGFloat = 1.06) -> some View {
+        modifier(HoverScale(scale: scale))
+    }
+}
+
+struct HoverScale: ViewModifier {
+    let scale: CGFloat
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(hovering ? scale : 1)
+            .animation(.smooth(duration: 0.16), value: hovering)
+            .onHover { hovering = $0 }
     }
 }
 
@@ -108,6 +133,7 @@ struct GlassIconButton: View {
         }
         .buttonStyle(.plain)
         .notchGlass(in: Circle(), tint: prominent ? (tint ?? Color.white.opacity(0.3)) : nil, interactive: true)
+        .hoverScale()
     }
 }
 
@@ -130,5 +156,6 @@ struct GlassPill: View {
         }
         .buttonStyle(.plain)
         .notchGlass(in: Capsule(), tint: tint, interactive: true)
+        .hoverScale(1.04)
     }
 }

@@ -15,12 +15,12 @@ struct NotchRootView: View {
     @EnvironmentObject private var calendar: CalendarMonitor
     @EnvironmentObject private var timer: FocusTimer
 
-    private let spring = Animation.spring(response: 0.42, dampingFraction: 0.78)
+    private let spring = Animation.spring(response: 0.45, dampingFraction: 0.8)
 
     private var activity: LiveActivity? {
         if settings.liveTimer, timer.isRunning { return .timer }
         if settings.liveMusic, media.isPlaying { return .music }
-        if settings.liveCalendar, let m = calendar.minutesToNext, m <= 10 { return .meeting(m) }
+        if settings.liveCalendar, let m = calendar.minutesToNextMeeting, m <= 10 { return .meeting(m) }
         return nil
     }
 
@@ -51,7 +51,7 @@ struct NotchRootView: View {
         let style = settings.glowStyle
         if timer.isRunning { return GlowSpec(color: settings.accent.color, style: style, progress: timer.progress) }
         if media.isPlaying { return GlowSpec(color: settings.accent.color, style: style, progress: nil) }
-        if let m = calendar.minutesToNext, m <= 5 { return GlowSpec(color: .orange, style: .pulse, progress: nil) }
+        if let m = calendar.minutesToNextMeeting, m <= 5 { return GlowSpec(color: .orange, style: .pulse, progress: nil) }
         if battery.hasBattery, battery.isCharging, settings.liveBattery {
             return GlowSpec(color: .green, style: .pulse, progress: nil)
         }
@@ -66,6 +66,12 @@ struct NotchRootView: View {
 
                 content
                     .clipShape(NotchShape(topRadius: radii.top, bottomRadius: radii.bottom))
+
+                if vm.isOpen {
+                    NotchOutline(topRadius: radii.top, bottomRadius: radii.bottom)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
 
                 if let g = glow {
                     GlowBar(top: radii.top, bottom: radii.bottom, color: g.color, style: g.style, progress: g.progress)
@@ -90,7 +96,7 @@ struct NotchRootView: View {
             CompactActivity(activity: a)
                 .frame(height: vm.geometry.notchSize.height)
                 .frame(maxHeight: .infinity, alignment: .top)
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
         }
     }
 }
@@ -110,7 +116,7 @@ struct CompactActivity: View {
             Spacer(minLength: 0)
             right
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
     }
 
     @ViewBuilder private var left: some View {
@@ -122,6 +128,7 @@ struct CompactActivity: View {
                     .scaledToFill()
                     .frame(width: 20, height: 20)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.4), radius: 2, x: 0, y: 1)
             } else {
                 Image(systemName: "music.note").font(.system(size: 12, weight: .semibold)).foregroundStyle(settings.accent.color)
             }
@@ -137,9 +144,17 @@ struct CompactActivity: View {
         case .music:
             EqualizerBars(color: settings.accent.color, active: media.isPlaying)
         case .timer:
-            Text(timer.display).font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit().foregroundStyle(Color.white)
+            Text(timer.display)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .foregroundStyle(Color.white)
         case .meeting(let m):
-            Text("\(m) min").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Color.orange)
+            Text("\(m) min")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(Color.orange)
         }
     }
 }
@@ -151,30 +166,33 @@ struct OpenPanel: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var battery: BatteryMonitor
     @EnvironmentObject private var media: MediaMonitor
+    @Namespace private var tabNamespace
 
     /// Horní rohy tvaru se rozšiřují ven, takže tělo je užší o poloměr na každé straně.
-    private var sideInset: CGFloat { NotchLayout.openTopRadius + NotchLayout.margin }
+    private var sideInset: CGFloat { NotchLayout.sideInset }
+
+    private var headerHeight: CGFloat { max(vm.geometry.notchSize.height, 32) }
+
+    private var cardTransition: AnyTransition {
+        .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: NotchLayout.spacingM) {
                 tabBar
-                Spacer(minLength: vm.geometry.notchSize.width + 24)
+                Spacer(minLength: vm.geometry.notchSize.width + 16)
                 statusCluster
             }
-            .frame(height: vm.geometry.notchSize.height)
+            .frame(height: headerHeight)
             .padding(.horizontal, sideInset)
 
-            Group {
-                switch vm.tab {
-                case .home: HomeView()
-                case .calendar: CalendarView()
-                case .shelf: ShelfView()
-                case .tools: ToolsView()
-                }
+            ZStack {
+                tabContent
             }
+            .animation(.smooth(duration: 0.3), value: vm.tab)
             .padding(.horizontal, sideInset)
-            .padding(.top, 8)
+            .padding(.top, NotchLayout.spacingS)
             .padding(.bottom, NotchLayout.margin)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -185,70 +203,141 @@ struct OpenPanel: View {
         }
     }
 
-    /// Jemné barevné světlo za skleněnými kartami (sklo na čisté černé není vidět).
+    @ViewBuilder
+    private var tabContent: some View {
+        switch vm.tab {
+        case .home: HomeView().transition(cardTransition)
+        case .calendar: CalendarView().transition(cardTransition)
+        case .shelf: ShelfView().transition(cardTransition)
+        case .tools: ToolsView().transition(cardTransition)
+        }
+    }
+
+    /// Tlumené barevné světlo za skleněnými kartami (sklo na čisté černé není vidět),
+    /// ale dost tmavé, aby karty měly kontrast.
     private var ambient: some View {
-        ZStack {
+        let hasArt = media.artwork != nil && media.isPlaying
+        return ZStack {
             Color.black
-            if let art = media.artwork, media.isPlaying {
+            if hasArt, let art = media.artwork {
                 Image(nsImage: art)
                     .resizable()
                     .scaledToFill()
-                    .blur(radius: 50)
-                    .opacity(0.5)
+                    .blur(radius: 60)
+                    .saturation(0.7)
+                    .opacity(0.32)
+                Color.black.opacity(0.35)
             } else {
-                RadialGradient(colors: [settings.accent.color.opacity(0.38), Color.clear],
-                               center: .bottomLeading, startRadius: 0, endRadius: 320)
-                RadialGradient(colors: [Color.purple.opacity(0.22), Color.clear],
-                               center: .bottomTrailing, startRadius: 0, endRadius: 280)
+                RadialGradient(colors: [settings.accent.color.opacity(0.2), Color.clear],
+                               center: .bottomLeading, startRadius: 0, endRadius: 300)
+                RadialGradient(colors: [Color.purple.opacity(0.12), Color.clear],
+                               center: .bottomTrailing, startRadius: 0, endRadius: 260)
             }
+            // Hlavička zůstává na čisté černé (splývá s notchem), světlo sílí směrem dolů.
+            LinearGradient(colors: [Color.black, Color.black.opacity(0)],
+                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.4))
         }
         .clipped()
+        .animation(.smooth(duration: 0.6), value: hasArt)
     }
 
     private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(settings.visibleTabs) { tab in
-                let active = vm.tab == tab
-                Button {
-                    withAnimation(.smooth(duration: 0.25)) { vm.tab = tab }
-                } label: {
-                    Image(systemName: tab.symbol)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(active ? Color.white : Color.white.opacity(0.55))
-                        .frame(width: 32, height: 24)
-                        .background {
-                            if active { Capsule().fill(settings.accent.color.opacity(0.55)) }
-                        }
-                        .contentShape(Capsule())
+        GlassContainer(spacing: 4) {
+            HStack(spacing: 2) {
+                ForEach(settings.visibleTabs) { tab in
+                    TabButton(tab: tab,
+                              active: vm.tab == tab,
+                              accent: settings.accent.color,
+                              namespace: tabNamespace) {
+                        withAnimation(.smooth(duration: 0.3)) { vm.tab = tab }
+                    }
                 }
-                .buttonStyle(.plain)
-                .help(tab.title)
             }
+            .padding(3)
+            .notchGlass(in: Capsule(), tint: Color.white.opacity(0.05))
         }
-        .padding(3)
-        .notchGlass(in: Capsule(), tint: Color.white.opacity(0.04))
     }
 
     private var statusCluster: some View {
-        HStack(spacing: 8) {
-            if battery.hasBattery {
-                HStack(spacing: 4) {
-                    Image(systemName: battery.isCharging ? "bolt.fill" : "battery.75percent")
-                        .font(.system(size: 11))
-                        .foregroundStyle(battery.isCharging ? Color.green : Color.white.opacity(0.75))
-                    Text("\(battery.level) %")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.white.opacity(0.9))
+        GlassContainer(spacing: NotchLayout.spacingS) {
+            HStack(spacing: NotchLayout.spacingS) {
+                if battery.hasBattery {
+                    batteryPill
                 }
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .notchGlass(in: Capsule(), tint: Color.white.opacity(0.04))
+                GlassIconButton(symbol: "gearshape.fill", size: NotchLayout.controlHeight) {
+                    openNotchMaxSettings()
+                }
+                .help("Nastavení")
             }
-            GlassIconButton(symbol: "gearshape.fill", size: 26) {
-                openNotchMaxSettings()
+        }
+    }
+
+    private var batteryPill: some View {
+        HStack(spacing: 4) {
+            Image(systemName: BatteryIcon.name(level: battery.level, charging: battery.isCharging))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(battery.isCharging ? Color.green : Color.white.opacity(0.8))
+            Text("\(battery.level) %")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Color.white.opacity(0.9))
+        }
+        .padding(.horizontal, 10)
+        .frame(height: NotchLayout.controlHeight)
+        .notchGlass(in: Capsule(), tint: battery.isCharging ? Color.green.opacity(0.14) : Color.white.opacity(0.05))
+    }
+}
+
+/// Záložka s plynule přesouvaným indikátorem; aktivní záložka ukazuje i název.
+private struct TabButton: View {
+    let tab: NotchTab
+    let active: Bool
+    let accent: Color
+    let namespace: Namespace.ID
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                if active {
+                    Text(tab.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .transition(.opacity)
+                }
             }
-            .help("Nastavení")
+            .foregroundStyle(foreground)
+            .padding(.horizontal, active ? 10 : 0)
+            .frame(minWidth: 28)
+            .frame(height: NotchLayout.controlHeight - 6)
+            .background { indicator }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.smooth(duration: 0.15), value: hovering)
+        .help(tab.title)
+    }
+
+    private var foreground: Color {
+        if active { return Color.white }
+        return Color.white.opacity(hovering ? 0.9 : 0.62)
+    }
+
+    @ViewBuilder
+    private var indicator: some View {
+        if active {
+            Capsule()
+                .fill(accent.opacity(0.3))
+                .overlay(Capsule().strokeBorder(accent.opacity(0.55), lineWidth: 0.75))
+                .matchedGeometryEffect(id: "tabIndicator", in: namespace)
+        } else if hovering {
+            Capsule().fill(Color.white.opacity(0.08))
         }
     }
 }

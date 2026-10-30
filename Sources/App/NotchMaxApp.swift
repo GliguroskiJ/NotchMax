@@ -53,7 +53,13 @@ final class SettingsWindowController {
             let host = NSHostingController(rootView: SettingsView().withServices())
             let w = NSWindow(contentViewController: host)
             w.title = "NotchMax"
-            w.styleMask = [.titled, .closable, .miniaturizable]
+            w.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+            w.titleVisibility = .hidden
+            w.titlebarAppearsTransparent = true
+            w.isMovableByWindowBackground = true
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.standardWindowButton(.zoomButton)?.isEnabled = false
             w.isReleasedWhenClosed = false
             w.appearance = NSAppearance(named: .darkAqua)
             w.center()

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Sparkle
 
 /// Aktualizace přes Sparkle 2: appcast.xml leží u GitHub Release, update se vždy

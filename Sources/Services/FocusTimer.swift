@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import IOKit.pwr_mgt
 
 /// Focus časovač + „nenechat Mac usnout“.

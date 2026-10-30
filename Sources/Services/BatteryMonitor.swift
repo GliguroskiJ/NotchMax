@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import IOKit.ps
 
 /// Stav baterie přes IOKit. Událost zapojení/odpojení nabíječky spouští animaci.

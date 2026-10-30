@@ -7,74 +7,103 @@ struct ShelfView: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var targeted = false
 
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(targeted ? 0.12 : 0.06))
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(
-                        targeted ? settings.accent.color : Color.white.opacity(0.18),
-                        style: StrokeStyle(lineWidth: 1.2, dash: shelf.items.isEmpty ? [5, 4] : [])
-                    )
-                if shelf.items.isEmpty {
-                    VStack(spacing: 6) {
-                        Image(systemName: "arrow.down.doc").font(.system(size: 22, weight: .light))
-                        Text("Přetáhni sem soubory").font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundStyle(Color.white.opacity(0.5))
-                } else {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 10) {
-                            ForEach(shelf.items) { item in tile(item) }
-                        }
-                        .padding(12)
-                    }
-                    .scrollIndicators(.hidden)
-                }
-            }
-            .animation(.smooth(duration: 0.2), value: targeted)
-            .onDrop(of: [UTType.fileURL], isTargeted: $targeted) { providers in
-                shelf.add(providers: providers)
-                return true
-            }
+    private var dropShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: NotchLayout.cardRadius, style: .continuous)
+    }
 
+    var body: some View {
+        HStack(spacing: NotchLayout.spacingM) {
+            dropZone
             if !shelf.items.isEmpty {
-                VStack(spacing: 8) {
-                    GlassContainer(spacing: 8) {
-                        VStack(spacing: 8) {
-                            GlassIconButton(symbol: "airplayaudio", size: 34) { shelf.airDrop(shelf.items) }
-                                .help("Poslat vše přes AirDrop")
-                            GlassIconButton(symbol: "trash", size: 34) { shelf.clear() }
-                                .help("Vyprázdnit odkladiště")
+                actions
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: shelf.items.isEmpty)
+    }
+
+    private var dropZone: some View {
+        let isEmpty = shelf.items.isEmpty
+        let border: Color = targeted ? settings.accent.color.opacity(0.9) : Color.white.opacity(isEmpty ? 0.2 : 0.09)
+        let dash: [CGFloat] = isEmpty ? [6, 5] : []
+        return ZStack {
+            if isEmpty {
+                EmptyState(symbol: targeted ? "arrow.down.circle.fill" : "arrow.down.doc",
+                           title: "Přetáhni sem soubory",
+                           message: "Odsud je pak přetáhneš jinam nebo pošleš přes AirDrop")
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: NotchLayout.spacingS) {
+                        ForEach(shelf.items) { item in
+                            ShelfTile(item: item) { shelf.remove(item) }
                         }
                     }
+                    .padding(10)
+                    .frame(maxHeight: .infinity)
                 }
+                .scrollIndicators(.hidden)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .notchGlass(in: dropShape, tint: targeted ? settings.accent.color.opacity(0.22) : Color.white.opacity(0.06))
+        .background(dropShape.fill(Color.black.opacity(0.28)))
+        .overlay(dropShape.strokeBorder(border, style: StrokeStyle(lineWidth: 1, dash: dash)))
+        .animation(.smooth(duration: 0.2), value: targeted)
+        .onDrop(of: [UTType.fileURL], isTargeted: $targeted) { providers in
+            shelf.add(providers: providers)
+            return true
         }
     }
 
-    private func tile(_ item: ShelfItem) -> some View {
-        VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
-                    .resizable()
-                    .frame(width: 48, height: 48)
-                Button { shelf.remove(item) } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.8), Color.black.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-                .offset(x: 6, y: -6)
+    private var actions: some View {
+        GlassContainer(spacing: NotchLayout.spacingS) {
+            VStack(spacing: NotchLayout.spacingS) {
+                GlassIconButton(symbol: "airplayaudio", size: 40) { shelf.airDrop(shelf.items) }
+                    .help("Poslat vše přes AirDrop")
+                GlassIconButton(symbol: "trash", size: 40) { shelf.clear() }
+                    .help("Vyprázdnit odkladiště")
             }
+        }
+        .frame(maxHeight: .infinity)
+    }
+}
+
+private struct ShelfTile: View {
+    let item: ShelfItem
+    let onRemove: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                .resizable()
+                .frame(width: 44, height: 44)
             Text(item.name)
                 .font(.system(size: 10))
                 .foregroundStyle(Color.white.opacity(0.8))
                 .lineLimit(1)
+                .truncationMode(.middle)
                 .frame(width: 70)
         }
-        .padding(.top, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: NotchLayout.nestedRadius, style: .continuous)
+                .fill(Color.white.opacity(hovering ? 0.11 : 0.07))
+        )
+        .overlay(alignment: .topTrailing) {
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.white.opacity(0.85), Color.black.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .opacity(hovering ? 1 : 0.5)
+            .padding(4)
+        }
+        .animation(.smooth(duration: 0.15), value: hovering)
+        .onHover { hovering = $0 }
         .onDrag {
             NSItemProvider(contentsOf: item.url) ?? NSItemProvider(object: item.url as NSURL)
         }
