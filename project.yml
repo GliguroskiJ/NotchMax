@@ -17,7 +17,6 @@ targets:
     dependencies:
       - package: Sparkle
         product: Sparkle
-        embed: true
     info:
       path: Config/Info.plist
       properties:
