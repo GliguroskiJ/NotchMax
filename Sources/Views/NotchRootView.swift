@@ -1,29 +1,17 @@
 import SwiftUI
 import AppKit
 
-enum LiveActivity: Equatable {
+enum LiveActivity: Hashable {
     case timer
     case music
-    case meeting(Int)
-    case battery
+    /// Nejbližší schůzka – nese čas začátku, odpočet se počítá každou sekundu.
+    case meeting(Date)
     case claude
     case privacy
-
-    /// Druh aktivity (pro vyloučení duplicity mezi levou a pravou stranou).
-    var slot: ActivitySlot {
-        switch self {
-        case .timer: return .timer
-        case .music: return .music
-        case .meeting: return .meeting
-        case .battery: return .battery
-        case .claude: return .claude
-        case .privacy: return .none
-        }
-    }
 }
 
 /// Co se vykreslí na jedné straně notche.
-enum SidePiece: Equatable {
+enum SidePiece: Hashable {
     /// Jen ikona (jedna aktivita rozdělená na obě strany – levá část).
     case icon(LiveActivity)
     /// Jen detail (jedna aktivita rozdělená na obě strany – pravá část).
@@ -51,6 +39,8 @@ enum CompactMetrics {
     static let dotSize: CGFloat = 6
     static let dotSpacing: CGFloat = 4
     static let claudeColor = Color(red: 0.85, green: 0.47, blue: 0.34)
+    /// Nejširší běžný text odpočtu – podle něj se měří šířka, aby se tvar každou sekundu necukal.
+    static let counterTemplate = "00 min"
 
     /// Šířka textu v písmu live activity (zaoblené, číslice stejně široké) + malá rezerva.
     static func textWidth(_ string: String, size: CGFloat = 11, weight: NSFont.Weight = .semibold) -> CGFloat {
@@ -74,12 +64,16 @@ enum CompactMetrics {
         return CGFloat(n) * dotSize + CGFloat(n - 1) * dotSpacing
     }
 
-    static func meetingText(_ minutes: Int) -> String {
-        minutes <= 1 ? "1 min" : "\(minutes) min"
+    /// Odpočet: od 60 s výš jen minuty (zaokrouhlené nahoru), v poslední minutě jen sekundy.
+    static func countdownText(_ seconds: TimeInterval) -> String {
+        let secs: Int = max(0, Int(ceil(seconds)))
+        if secs >= 60 { return "\((secs + 59) / 60) min" }
+        return "\(secs) s"
     }
 
-    static func batteryText(_ level: Int) -> String {
-        "\(level) %"
+    /// Šířka odpočtu – vždy aspoň pro „00 min“, aby se neměnila s každým tikem.
+    static func counterWidth(_ string: String) -> CGFloat {
+        max(textWidth(counterTemplate), textWidth(string))
     }
 }
 
@@ -87,7 +81,6 @@ enum CompactMetrics {
 struct NotchRootView: View {
     @EnvironmentObject private var vm: NotchViewModel
     @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var battery: BatteryMonitor
     @EnvironmentObject private var media: MediaMonitor
     @EnvironmentObject private var calendar: CalendarMonitor
     @EnvironmentObject private var timer: FocusTimer
@@ -114,35 +107,55 @@ struct NotchRootView: View {
 
     // MARK: Výběr aktivit
 
-    /// Aktivita s nejvyšší prioritou (volitelně kromě jednoho druhu, který už je na druhé straně).
-    private func priorityActivity(excluding excluded: ActivitySlot?) -> LiveActivity? {
-        var candidates: [LiveActivity] = []
-        let minutes: Int? = settings.liveCalendar ? calendar.minutesToNextMeeting : nil
-        // Blížící se schůzka (do 5 minut) má přednost před časovačem i hudbou, ať je odpočet vidět vždy.
-        if let m = minutes, m <= 5 { candidates.append(.meeting(m)) }
-        if settings.liveTimer, timer.isRunning { candidates.append(.timer) }
-        if settings.liveMusic, media.isPlaying { candidates.append(.music) }
-        if let m = minutes, m > 5, m <= 10 { candidates.append(.meeting(m)) }
-        if settings.liveClaude, claudeActive { candidates.append(.claude) }
-        return candidates.first { $0.slot != excluded }
+    /// Začátek nejbližší schůzky, pokud začíná do 10 minut (a live kalendář je zapnutý).
+    private var upcomingMeetingStart: Date? {
+        guard settings.liveCalendar,
+              let m = calendar.minutesToNextMeeting, m <= 10 else { return nil }
+        return calendar.meetings.first(where: { $0.start > calendar.now })?.start
     }
 
-    /// Aktivita pevně zvolená pro jednu stranu (režim dvou aktivit); nil = teď nemá co ukázat.
-    private func fixedActivity(for slot: ActivitySlot) -> LiveActivity? {
-        switch slot {
-        case .music:
-            return media.isPlaying ? .music : nil
-        case .timer:
-            return timer.isRunning ? .timer : nil
-        case .meeting:
-            if let m = calendar.minutesToNextMeeting, m <= 60 { return .meeting(m) }
-            return nil
-        case .battery:
-            return battery.hasBattery ? .battery : nil
-        case .claude:
-            return claudeActive ? .claude : nil
-        case .auto, .none:
-            return nil
+    /// Schůzka do 5 minut je vidět vždy, i když není mezi dvěma nejnovějšími aktivitami.
+    private var meetingIsUrgent: Bool {
+        guard upcomingMeetingStart != nil, let m = calendar.minutesToNextMeeting else { return false }
+        return m <= 5
+    }
+
+    /// Právě aktivní druhy live activity (podle přepínačů v Nastavení).
+    private var activeKinds: Set<LiveKind> {
+        var kinds = Set<LiveKind>()
+        if upcomingMeetingStart != nil { kinds.insert(.meeting) }
+        if settings.liveTimer, timer.isRunning { kinds.insert(.timer) }
+        if settings.liveMusic, media.isPlaying { kinds.insert(.music) }
+        if settings.liveClaude, claudeActive { kinds.insert(.claude) }
+        return kinds
+    }
+
+    /// Aktivní druhy seřazené podle času zapnutí (nejstarší první). Druhy, které model
+    /// ještě nezaznamenal (stejný snímek jako změna), se připojí na konec.
+    private var orderedActiveKinds: [LiveKind] {
+        let active = activeKinds
+        var ordered: [LiveKind] = vm.activityOrder.filter { active.contains($0) }
+        ordered.append(contentsOf: LiveKind.allCases.filter { active.contains($0) && !ordered.contains($0) })
+        return ordered
+    }
+
+    /// Nanejvýš dvě zobrazené aktivity: dvě naposledy spuštěné (starší vlevo, novější vpravo).
+    private var shownActivities: [LiveActivity] {
+        let ordered = orderedActiveKinds
+        var picked: [LiveKind] = ordered.count > 2 ? Array(ordered.suffix(2)) : ordered
+        if ordered.count > 2, meetingIsUrgent, !picked.contains(.meeting) {
+            // Schůzka je starší než obě vybrané, takže zůstane vlevo.
+            picked = [.meeting, picked[picked.count - 1]]
+        }
+        return picked.map { activity(for: $0) }
+    }
+
+    private func activity(for kind: LiveKind) -> LiveActivity {
+        switch kind {
+        case .meeting: return .meeting(upcomingMeetingStart ?? Date())
+        case .timer: return .timer
+        case .music: return .music
+        case .claude: return .claude
         }
     }
 
@@ -150,44 +163,41 @@ struct NotchRootView: View {
 
     private var closedLayout: ClosedLayout? {
         guard !vm.isOpen, vm.banner == nil, hudEvent == nil else { return nil }
-        return settings.dualActivities ? dualLayout() : singleLayout()
+        let shown = shownActivities
+        if shown.count >= 2 { return dualLayout(older: shown[0], newer: shown[1]) }
+        if let only = shown.first { return singleLayout(only) }
+        return privacyOnlyLayout()
+    }
+
+    /// Bez aktivity jen tečky soukromí (symetricky), jinak obyčejný notch.
+    private func privacyOnlyLayout() -> ClosedLayout? {
+        guard privacyActive else { return nil }
+        let width = sideWidth(content: 0, dots: true)
+        return ClosedLayout(left: nil, right: nil, showsPrivacy: true,
+                            leftWidth: width, rightWidth: width)
     }
 
     /// Jedna aktivita: ikona vlevo, detail vpravo, obě strany stejně široké.
-    private func singleLayout() -> ClosedLayout? {
-        var chosen: LiveActivity? = priorityActivity(excluding: nil)
-        if chosen == nil, privacyActive { chosen = .privacy }
-        guard let activity = chosen else { return nil }
-        let left: SidePiece? = activity == .privacy ? nil : .icon(activity)
-        let right: SidePiece? = activity == .privacy ? nil : .detail(activity)
-        let leftWidth = sideWidth(content: left.map { pieceWidth($0) } ?? 0, dots: false)
-        let rightWidth = sideWidth(content: right.map { pieceWidth($0) } ?? 0, dots: privacyActive)
+    private func singleLayout(_ activity: LiveActivity) -> ClosedLayout {
+        let left = SidePiece.icon(activity)
+        let right = SidePiece.detail(activity)
+        let leftWidth = sideWidth(content: pieceWidth(left), dots: false)
+        let rightWidth = sideWidth(content: pieceWidth(right), dots: privacyActive)
         let width = max(leftWidth, rightWidth)
         return ClosedLayout(left: left, right: right, showsPrivacy: privacyActive,
                             leftWidth: width, rightWidth: width)
     }
 
-    /// Dvě nezávislé aktivity: každá strana je samostatný widget s vlastní šířkou.
-    private func dualLayout() -> ClosedLayout? {
-        let leftSlot = settings.leftActivity
-        let rightSlot = settings.rightActivity
-        let rightFixed = fixedActivity(for: rightSlot)
-        let leftActivity: LiveActivity? = leftSlot == .auto
-            ? priorityActivity(excluding: rightFixed?.slot)
-            : fixedActivity(for: leftSlot)
-        let rightActivity: LiveActivity? = rightSlot == .auto
-            ? priorityActivity(excluding: leftActivity?.slot)
-            : rightFixed
-        let left: SidePiece? = leftActivity.map { SidePiece.widget($0) }
-        let right: SidePiece? = rightActivity.map { SidePiece.widget($0) }
-        if left == nil, right == nil, !privacyActive { return nil }
-        return ClosedLayout(
-            left: left,
-            right: right,
-            showsPrivacy: privacyActive,
-            leftWidth: sideWidth(content: left.map { pieceWidth($0) } ?? 0, dots: false),
-            rightWidth: sideWidth(content: right.map { pieceWidth($0) } ?? 0, dots: privacyActive)
-        )
+    /// Dvě aktivity: každá strana je samostatný widget, obě strany stejně široké,
+    /// takže tvar zůstává symetrický kolem fyzického notche.
+    private func dualLayout(older: LiveActivity, newer: LiveActivity) -> ClosedLayout {
+        let left = SidePiece.widget(older)
+        let right = SidePiece.widget(newer)
+        let leftWidth = sideWidth(content: pieceWidth(left), dots: false)
+        let rightWidth = sideWidth(content: pieceWidth(right), dots: privacyActive)
+        let width = max(leftWidth, rightWidth)
+        return ClosedLayout(left: left, right: right, showsPrivacy: privacyActive,
+                            leftWidth: width, rightWidth: width)
     }
 
     /// Šířka strany: vnější okraj + obsah (+ tečky soukromí) + vnitřní okraj; bez obsahu 0.
@@ -216,13 +226,12 @@ struct NotchRootView: View {
     private func detailWidth(_ activity: LiveActivity, inWidget: Bool) -> CGFloat {
         switch activity {
         case .music:
-            return CompactMetrics.equalizerWidth
+            // Ve dvojici aktivit je hudba jen obal alba, bez ekvalizéru.
+            return inWidget ? 0 : CompactMetrics.equalizerWidth
         case .timer:
-            return CompactMetrics.textWidth(timer.display)
-        case .meeting(let m):
-            return CompactMetrics.textWidth(CompactMetrics.meetingText(m))
-        case .battery:
-            return CompactMetrics.textWidth(CompactMetrics.batteryText(battery.level))
+            return CompactMetrics.counterWidth(CompactMetrics.countdownText(timer.remaining))
+        case .meeting:
+            return CompactMetrics.counterWidth(CompactMetrics.counterTemplate)
         case .claude:
             if claude.waitingCount > 0 { return CompactMetrics.badgeWidth(claude.waitingCount) }
             return inWidget ? 0 : CompactMetrics.badgeWidth(max(claude.activeCount, 1))
@@ -261,7 +270,7 @@ struct NotchRootView: View {
         let r = radii(hud: hudLayout)
         let hoverSides: HoverSides = hudLayout.map { HoverSides(left: $0.side, right: $0.side) }
             ?? HoverSides(left: layout?.leftWidth ?? 0, right: layout?.rightWidth ?? 0)
-        // Asymetrický tvar se posune tak, aby fyzický notch zůstal přesně uprostřed.
+        // Strany jsou vždy stejně široké; posun je jen pojistka pro případnou asymetrii.
         let shift: CGFloat = layout.map { ($0.rightWidth - $0.leftWidth) / 2 } ?? 0
         ZStack(alignment: .top) {
             ZStack(alignment: .top) {
@@ -292,6 +301,10 @@ struct NotchRootView: View {
         // Oblast pro najetí myší (NotchWindowController.closedHotRect) kopíruje šířku live activity i HUD.
         .onChange(of: hoverSides, initial: true) { _, sides in
             vm.closedSideWidths = (sides.left, sides.right)
+        }
+        // Pořadí zapnutí aktivit – podle něj se vybírají dvě nejnovější.
+        .onChange(of: activeKinds, initial: true) { _, kinds in
+            vm.updateActiveActivities(kinds)
         }
         .onChange(of: vm.isOpen) { _, open in
             if !open { vm.showMirror = false }
@@ -344,10 +357,14 @@ struct CompactActivity: View {
     let layout: ClosedLayout
     let notchWidth: CGFloat
     @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var battery: BatteryMonitor
     @EnvironmentObject private var media: MediaMonitor
     @EnvironmentObject private var timer: FocusTimer
     @ObservedObject private var claude = ClaudeMonitor.shared
+
+    /// Přechod obsahu při změně rozvržení (jedna ↔ dvě aktivity, výměna aktivity).
+    private var pieceTransition: AnyTransition {
+        .opacity.combined(with: .scale(scale: 0.7))
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -368,6 +385,8 @@ struct CompactActivity: View {
         if let piece = layout.left, layout.leftWidth > 0 {
             HStack(spacing: 0) {
                 pieceView(piece)
+                    .id(piece)
+                    .transition(pieceTransition)
                 Spacer(minLength: 0)
             }
             .padding(.leading, NotchLayout.compactOuterPadding)
@@ -384,6 +403,8 @@ struct CompactActivity: View {
                 Spacer(minLength: 0)
                 if let piece = layout.right {
                     pieceView(piece)
+                        .id(piece)
+                        .transition(pieceTransition)
                 }
                 if layout.showsPrivacy {
                     PrivacyDots()
@@ -415,9 +436,10 @@ struct CompactActivity: View {
 
     private func hasDetail(_ activity: LiveActivity, inWidget: Bool) -> Bool {
         switch activity {
+        case .music: return !inWidget
         case .claude: return claude.waitingCount > 0 || !inWidget
         case .privacy: return false
-        case .music, .timer, .meeting, .battery: return true
+        case .timer, .meeting: return true
         }
     }
 
@@ -440,14 +462,6 @@ struct CompactActivity: View {
             symbol("timer", color: settings.accent.color)
         case .meeting:
             symbol("calendar", color: Color.orange)
-        case .battery:
-            Image(systemName: BatteryIcon.name(level: battery.level, charging: battery.isCharging))
-                .resizable()
-                .scaledToFit()
-                .fontWeight(.semibold)
-                .foregroundStyle(battery.isCharging ? Color.green : Color.white.opacity(0.85))
-                .frame(width: NotchLayout.compactIcon, height: 11)
-                .frame(height: NotchLayout.compactIcon)
         case .claude:
             CompactClaudeSparkle(working: claude.isWorking)
                 .frame(width: NotchLayout.compactIcon, height: NotchLayout.compactIcon)
@@ -471,12 +485,13 @@ struct CompactActivity: View {
             EqualizerBars(color: settings.accent.color, active: media.isPlaying)
                 .frame(width: CompactMetrics.equalizerWidth)
         case .timer:
-            compactText(timer.display, color: Color.white)
-        case .meeting(let m):
-            compactText(CompactMetrics.meetingText(m), color: Color.orange)
-        case .battery:
-            compactText(CompactMetrics.batteryText(battery.level),
-                        color: battery.isCharging ? Color.green : Color.white)
+            compactText(CompactMetrics.countdownText(timer.remaining), color: Color.white)
+        case .meeting(let start):
+            // Odpočet do schůzky tiká každou sekundu jen po dobu, kdy je aktivita vidět.
+            TimelineView(.periodic(from: Date(), by: 1)) { context in
+                compactText(CompactMetrics.countdownText(start.timeIntervalSince(context.date)),
+                            color: Color.orange)
+            }
         case .claude:
             if claude.waitingCount > 0 {
                 CompactCountBadge(count: claude.waitingCount, fill: Color.orange)
@@ -493,9 +508,10 @@ struct CompactActivity: View {
             .font(.system(size: CompactMetrics.fontSize, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(color)
-            .contentTransition(.numericText())
+            .contentTransition(.numericText(countsDown: true))
             .lineLimit(1)
             .fixedSize()
+            .animation(.smooth(duration: 0.3), value: string)
     }
 }
 

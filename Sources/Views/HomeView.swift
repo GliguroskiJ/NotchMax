@@ -162,10 +162,16 @@ struct NextEventCard: View {
         } else {
             // Není připojený žádný zdroj – nastavení nabídne kalendáře macOS i přímé přihlášení ke Googlu.
             VStack(alignment: .leading, spacing: 6) {
-                Text("Kalendář")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus") { openNotchMaxSettings(section: "calendar") }
+                HStack(spacing: 5) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(CalendarConnectStyle.accent)
+                    Text("Kalendář")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                }
+                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus",
+                          tint: CalendarConnectStyle.tint) { openNotchMaxSettings(section: "calendar") }
             }
         }
     }

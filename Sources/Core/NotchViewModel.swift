@@ -28,6 +28,11 @@ enum NotchTab: String, CaseIterable, Identifiable {
     }
 }
 
+/// Druh live activity v zavřeném notchi (soukromí se kreslí zvlášť jako tečky).
+enum LiveKind: Int, Hashable, CaseIterable {
+    case meeting, timer, music, claude
+}
+
 @MainActor
 final class NotchViewModel: ObservableObject {
     enum Banner: Equatable { case charging }
@@ -50,10 +55,22 @@ final class NotchViewModel: ObservableObject {
     /// Záměrně není @Published, aby zápis nevyvolával překreslení.
     var closedSideWidths: (left: CGFloat, right: CGFloat) = (0, 0)
 
+    /// Pořadí, ve kterém se live activity zapnuly (nejstarší první, nejnovější poslední).
+    /// Zavřený notch podle něj ukazuje dvě naposledy spuštěné aktivity.
+    @Published private(set) var activityOrder: [LiveKind] = []
+
     private var chargeTask: Task<Void, Never>?
 
     init(geometry: NotchGeometry) {
         self.geometry = geometry
+    }
+
+    /// Aktualizuje pořadí aktivit: vypnuté odebere, nově zapnuté přidá na konec.
+    func updateActiveActivities(_ active: Set<LiveKind>) {
+        var order: [LiveKind] = activityOrder.filter { active.contains($0) }
+        let added: [LiveKind] = LiveKind.allCases.filter { active.contains($0) && !order.contains($0) }
+        order.append(contentsOf: added)
+        if order != activityOrder { activityOrder = order }
     }
 
     /// Animace po zapojení nabíječky: obrysem notche proběhnou zelené pulzy až k úrovni nabití.

@@ -342,6 +342,34 @@ struct SettingsToggleRow: View {
     }
 }
 
+/// Přepínač záložky v rozbaleném notchi – hlídá limit 5 záložek (Domů + 4 volitelné).
+struct TabToggleRow: View {
+    let title: String
+    var subtitle: String?
+    @Binding var isOn: Bool
+    @EnvironmentObject private var settings: AppSettings
+
+    init(title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isOn = isOn
+    }
+
+    private var isLocked: Bool { !isOn && !settings.canEnableMoreTabs }
+
+    var body: some View {
+        SettingsRow(title: title, subtitle: isLocked ? AppSettings.tabLimitNote : subtitle) {
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(settings.accent.color)
+                .disabled(isLocked)
+        }
+        .opacity(isLocked ? 0.6 : 1)
+        .help(isLocked ? AppSettings.tabLimitNote : "")
+    }
+}
+
 struct SettingsNote: View {
     let symbol: String
     let text: String
@@ -657,48 +685,11 @@ struct SettingsChipTile: View {
     }
 }
 
-private struct ActivitySlotPicker: View {
-    let title: String
-    @Binding var selection: ActivitySlot
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 14.5))
-                .foregroundStyle(Color.white)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-                ForEach(ActivitySlot.allCases) { slot in
-                    SettingsChipTile(title: slot.title, symbol: slot.symbol,
-                                     isSelected: selection == slot) {
-                        withAnimation(.smooth(duration: 0.25)) { selection = slot }
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 12)
-    }
-}
-
 private struct ActivitiesSettings: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Rozložení") {
-                SettingsToggleRow(title: "Dvě aktivity (vlevo a vpravo)",
-                                  subtitle: "Na každé straně notche se zobrazí jiná aktivita.",
-                                  isOn: $settings.dualActivities)
-                if settings.dualActivities {
-                    SettingsDivider()
-                    ActivitySlotPicker(title: "Levá strana", selection: $settings.leftActivity)
-                    SettingsDivider()
-                    ActivitySlotPicker(title: "Pravá strana", selection: $settings.rightActivity)
-                }
-            }
-            .animation(.smooth(duration: 0.25), value: settings.dualActivities)
-
             SettingsCard(header: "Živé aktivity vedle notche") {
                 SettingsToggleRow(title: "Hudba", subtitle: "Obal alba a ekvalizér.",
                                   isOn: $settings.liveMusic)
@@ -710,6 +701,9 @@ private struct ActivitiesSettings: View {
                 SettingsDivider()
                 SettingsToggleRow(title: "Claude agenti", subtitle: "Stav běžících Claude agentů.",
                                   isOn: $settings.liveClaude)
+                SettingsDivider()
+                SettingsNote(symbol: "rectangle.split.2x1",
+                             text: "Když běží dvě aktivity naráz, notch automaticky ukáže ty dvě poslední – jednu vlevo a jednu vpravo.")
             }
         }
     }
@@ -723,15 +717,18 @@ private struct ModulesSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard(header: "Záložky v rozbaleném notchi") {
-                SettingsToggleRow(title: "Kalendář", isOn: $settings.tabCalendar)
+                TabToggleRow(title: "Kalendář", isOn: $settings.tabCalendar)
                 SettingsDivider()
-                SettingsToggleRow(title: "Odkladiště souborů", isOn: $settings.tabShelf)
+                TabToggleRow(title: "Odkladiště souborů", isOn: $settings.tabShelf)
                 SettingsDivider()
-                SettingsToggleRow(title: "Nástroje", subtitle: "Časovač a další rychlé nástroje.", isOn: $settings.tabTools)
+                TabToggleRow(title: "Nástroje", subtitle: "Časovač a další rychlé nástroje.", isOn: $settings.tabTools)
                 SettingsDivider()
-                SettingsToggleRow(title: "Systém", subtitle: "Statistiky CPU, paměti a sítě.", isOn: $settings.tabSystem)
+                TabToggleRow(title: "Systém", subtitle: "Statistiky CPU, paměti a sítě.", isOn: $settings.tabSystem)
                 SettingsDivider()
-                SettingsToggleRow(title: "Agenti", subtitle: "Přehled Claude agentů.", isOn: $settings.tabAgents)
+                TabToggleRow(title: "Agenti", subtitle: "Přehled Claude agentů.", isOn: $settings.tabAgents)
+                SettingsDivider()
+                SettingsNote(symbol: "info.circle",
+                             text: "V notchi se vejde nejvýš 5 záložek včetně Domů – víc by se schovalo za fyzický notch.")
             }
 
             FocusSettingsSection()

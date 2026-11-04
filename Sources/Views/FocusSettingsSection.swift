@@ -1,95 +1,137 @@
 import AppKit
 import SwiftUI
 
-/// Nastavení „Soustředění s časovačem“: při startu focus časovače se spustí zkratka
-/// pro zapnutí macOS Soustředění, po skončení / zastavení zkratka pro vypnutí.
+/// Nastavení „Soustředění s časovačem“: při startu focus časovače NotchMax sám zapne
+/// macOS „Nerušit“ (přes Ovládací centrum a oprávnění Zpřístupnění), po skončení ho vypne.
 struct FocusSettingsSection: View {
     @EnvironmentObject private var settings: AppSettings
-    @ObservedObject private var store = ShortcutsStore.shared
+    @ObservedObject private var focus = FocusController.shared
+
+    @State private var accessibilityTrusted: Bool = false
+    @State private var isTesting = false
+    @State private var testResult: String?
+    @State private var testSucceeded = false
+
+    private let refreshTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
+    init() {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard(header: "Soustředění s časovačem") {
-                SettingsRow(title: "Zapnout Soustředění s časovačem",
-                            subtitle: "Při spuštění časovače zapne Soustředění, po skončení ho vypne.") {
-                    Toggle("", isOn: $settings.focusWithTimer)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .tint(settings.accent.color)
+                SettingsToggleRow(title: "Zapnout Nerušit s časovačem",
+                                  subtitle: "Při spuštění focus časovače se zapne Nerušit, po skončení nebo zastavení se zase vypne.",
+                                  isOn: $settings.focusWithTimer)
+                SettingsDivider()
+                SettingsNote(symbol: "moon.fill",
+                             text: "NotchMax přepíná „Nerušit“ automaticky – nic dalšího nastavovat nemusíš. Pokud už bylo Nerušit zapnuté před spuštěním časovače, po skončení ho nechá zapnuté.")
+            }
+
+            SettingsCard(header: "Oprávnění") {
+                SettingsRow(title: "Zpřístupnění",
+                            subtitle: accessibilityTrusted
+                                ? "NotchMax může přepínat Nerušit přes Ovládací centrum."
+                                : "Bez oprávnění Zpřístupnění nejde Nerušit přepnout.") {
+                    if accessibilityTrusted {
+                        statusBadge(text: "Povoleno", color: .green)
+                    } else {
+                        HStack(spacing: 8) {
+                            Button("Povolit přístupnost") {
+                                MediaKeyInterceptor.shared.requestAccess()
+                                refreshPermissions()
+                            }
+                            .controlSize(.regular)
+                            GlassPill(title: "Otevřít nastavení", symbol: "gearshape") {
+                                MediaKeyInterceptor.shared.openAccessibilitySettings()
+                            }
+                        }
+                    }
                 }
                 SettingsDivider()
-                SettingsRow(title: "Zkratka pro zapnutí", subtitle: status(for: settings.focusOnShortcut)) {
-                    shortcutPicker(selection: $settings.focusOnShortcut)
-                }
-                SettingsDivider()
-                SettingsRow(title: "Zkratka pro vypnutí", subtitle: status(for: settings.focusOffShortcut)) {
-                    shortcutPicker(selection: $settings.focusOffShortcut)
-                }
-                SettingsDivider()
-                SettingsRow(title: "Seznam zkratek",
-                            subtitle: store.hasLoaded ? "Načteno zkratek: \(store.shortcuts.count)" : "Zatím nenačteno") {
+                SettingsNote(symbol: "info.circle",
+                             text: "NotchMax na okamžik otevře v menu baru Soustředění (nebo Ovládací centrum), přepne „Nerušit“ a menu zase zavře. Aplikace není podepsaná vývojářským certifikátem, takže po aktualizaci může být potřeba Zpřístupnění odebrat a povolit znovu.")
+            }
+
+            SettingsCard(header: "Vyzkoušet") {
+                SettingsRow(title: "Vyzkoušet Nerušit",
+                            subtitle: testSubtitle) {
                     HStack(spacing: 8) {
-                        if store.isReloading {
+                        if isTesting {
                             ProgressView()
                                 .controlSize(.small)
                         }
-                        GlassPill(title: "Načíst zkratky", symbol: "arrow.clockwise") {
-                            store.reload()
+                        GlassPill(title: "Vyzkoušet", symbol: "moon.fill") {
+                            runTest()
                         }
+                        .disabled(isTesting)
+                        .opacity(isTesting ? 0.5 : 1)
                     }
                 }
-            }
-
-            SettingsCard(header: "Jak to nastavit") {
-                SettingsNote(symbol: "1.circle",
-                             text: "Otevři aplikaci Zkratky a vytvoř zkratku „NotchMax Focus On“.")
-                SettingsDivider()
-                SettingsNote(symbol: "2.circle",
-                             text: "Přidej akci „Nastavit soustředění“ → Zapnout „Nerušit“ (nebo vlastní režim soustředění).")
-                SettingsDivider()
-                SettingsNote(symbol: "3.circle",
-                             text: "Vytvoř druhou zkratku „NotchMax Focus Off“ se stejnou akcí nastavenou na Vypnout.")
-                SettingsDivider()
-                SettingsNote(symbol: "4.circle",
-                             text: "Vrať se sem, klikni na „Načíst zkratky“ a vyber je výše. Pak zapni přepínač.")
-                SettingsDivider()
-                SettingsRow(title: "Aplikace Zkratky") {
-                    GlassPill(title: "Otevřít Zkratky", symbol: "arrow.up.forward") {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
-                    }
+                if let error = focus.lastError, !isTesting, !testSucceeded {
+                    SettingsDivider()
+                    SettingsNote(symbol: "exclamationmark.triangle", text: error)
                 }
             }
         }
-        .onAppear {
-            if !store.hasLoaded { store.reload() }
-        }
+        .onAppear { refreshPermissions() }
+        .onReceive(refreshTimer) { _ in refreshPermissions() }
     }
 
     // MARK: - Pomocné
 
-    private func shortcutPicker(selection: Binding<String>) -> some View {
-        Picker("", selection: selection) {
-            ForEach(options(including: selection.wrappedValue), id: \.self) { name in
-                Text(name).tag(name)
+    private var testSubtitle: String {
+        if let testResult { return testResult }
+        if !focus.method.isEmpty { return "Naposledy fungovalo: \(focus.method)" }
+        return "Zapne Nerušit a po 3 s ho zase vypne."
+    }
+
+    private func refreshPermissions() {
+        let trusted = MediaKeyInterceptor.shared.isTrusted
+        if trusted != accessibilityTrusted { accessibilityTrusted = trusted }
+        focus.refreshPermission()
+    }
+
+    private func runTest() {
+        guard !isTesting else { return }
+        isTesting = true
+        testSucceeded = false
+        testResult = "Zapínám Nerušit…"
+        Task { @MainActor in
+            let onResult: FocusChangeResult = await FocusController.shared.apply(true)
+            guard onResult.ok else {
+                testResult = "Nepodařilo se zapnout: \(onResult.error ?? "neznámá chyba")"
+                isTesting = false
+                return
             }
+            if !onResult.changed {
+                // Nerušit už bylo zapnuté – nevypínat uživateli jeho vlastní režim.
+                testResult = "Nerušit už bylo zapnuté – funguje (\(onResult.method))."
+                testSucceeded = true
+                isTesting = false
+                return
+            }
+            testResult = "Nerušit zapnuto – vypnu za 3 s…"
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            testResult = "Vypínám Nerušit…"
+            let offResult: FocusChangeResult = await FocusController.shared.apply(false)
+            if offResult.ok {
+                testResult = "Funguje ✓ (\(onResult.method))"
+                testSucceeded = true
+            } else {
+                testResult = "Zapnutí fungovalo, vypnutí ne: \(offResult.error ?? "neznámá chyba")"
+            }
+            isTesting = false
         }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(maxWidth: 220)
     }
 
-    /// Načtené zkratky + aktuální hodnota, pokud mezi nimi chybí.
-    private func options(including current: String) -> [String] {
-        var list: [String] = store.shortcuts
-        if !current.isEmpty && !list.contains(current) {
-            list.insert(current, at: 0)
+    private func statusBadge(text: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.7))
         }
-        return list
-    }
-
-    private func status(for name: String) -> String? {
-        guard store.hasLoaded else { return nil }
-        if name.isEmpty { return "Není vybrána žádná zkratka." }
-        return store.contains(name) ? nil : "Zkratka „\(name)“ zatím neexistuje."
     }
 }

@@ -11,9 +11,9 @@ struct ClaudeSettingsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard(header: "Zobrazení") {
-                SettingsToggleRow(title: "Záložka Agenti",
-                                  subtitle: "Přehled relací Claude Code v rozbaleném notchi.",
-                                  isOn: $settings.tabAgents)
+                TabToggleRow(title: "Záložka Agenti",
+                             subtitle: "Přehled relací Claude Code v rozbaleném notchi.",
+                             isOn: $settings.tabAgents)
                 SettingsDivider()
                 SettingsToggleRow(title: "Živá aktivita u notche",
                                   subtitle: "Když Claude pracuje nebo čeká na tebe, ukáže se stav vedle notche.",

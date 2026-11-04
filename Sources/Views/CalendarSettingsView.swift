@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Jednotná zelená pro připojení kalendáře
+
+/// Zelený akcent pro „Připojit kalendář“ / „Povolit přístup“ – stejný na Domů, v záložce Kalendář i v nastavení.
+enum CalendarConnectStyle {
+    static let accent = Color.green
+    static let tint = Color.green.opacity(0.35)
+}
+
 // MARK: - Nastavení → Kalendář
 
 /// Dva způsoby připojení kalendáře:
@@ -57,7 +65,8 @@ struct CalendarSettings: View {
                            subtitle: "Kalendáře z aplikace Kalendář – iCloud, Exchange i Google účet přidaný do macOS.") {
                 switch calendar.access {
                 case .unknown:
-                    GlassPill(title: "Povolit přístup", symbol: "checkmark") { calendar.requestAccess() }
+                    GlassPill(title: "Povolit přístup", symbol: "checkmark",
+                              tint: CalendarConnectStyle.tint) { calendar.requestAccess() }
                 case .denied:
                     GlassPill(title: "Otevřít Soukromí", symbol: "arrow.up.forward") {
                         CalendarMonitor.openPrivacySettings()
@@ -78,7 +87,8 @@ struct CalendarSettings: View {
             CalSettingsDivider()
             CalSettingsRow(title: "Google účet v macOS",
                            subtitle: "Nejjednodušší cesta: v Nastavení systému → Internetové účty přidej Google a zapni u něj Kalendáře. Kalendáře se pak objeví tady.") {
-                GlassPill(title: "Přidat Google účet", symbol: "person.crop.circle.badge.plus") {
+                GlassPill(title: "Přidat Google účet", symbol: "person.crop.circle.badge.plus",
+                          tint: CalendarConnectStyle.tint) {
                     CalendarMonitor.openInternetAccounts()
                 }
             }
@@ -150,7 +160,7 @@ struct CalendarSettings: View {
                 HStack(alignment: .top, spacing: 8) {
                     Text("\(index + 1).")
                         .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(settings.accent.color)
+                        .foregroundStyle(CalendarConnectStyle.accent)
                         .frame(width: 16, alignment: .trailing)
                     Text(step)
                         .font(.system(size: 12.5))
@@ -186,7 +196,7 @@ struct CalendarSettings: View {
             } else {
                 Spacer(minLength: 8)
                 GlassPill(title: "Přihlásit se přes Google", symbol: "person.badge.key.fill",
-                          tint: settings.accent.color.opacity(0.35)) {
+                          tint: CalendarConnectStyle.tint) {
                     google.signIn()
                 }
                 .disabled(!google.hasCredentials)

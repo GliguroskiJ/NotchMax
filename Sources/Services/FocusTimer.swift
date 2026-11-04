@@ -2,8 +2,8 @@ import AppKit
 import Combine
 import IOKit.pwr_mgt
 
-/// Focus časovač + „nenechat Mac usnout“ + volitelné zapnutí macOS Soustředění
-/// (přes uživatelovy Apple Zkratky, protože veřejné API pro Focus neexistuje).
+/// Focus časovač + „nenechat Mac usnout“ + volitelné zapnutí macOS „Nerušit“
+/// (automaticky přes `FocusController`, bez Apple Zkratek).
 @MainActor
 final class FocusTimer: ObservableObject {
     @Published private(set) var isRunning = false
@@ -12,14 +12,18 @@ final class FocusTimer: ObservableObject {
     @Published var keepAwake = false {
         didSet { updateAssertion() }
     }
-    /// Chyba při zapínání/vypínání Soustředění (např. chybějící zkratka).
+    /// Chyba při zapínání/vypínání Soustředění (např. chybějící oprávnění Zpřístupnění).
     @Published var focusError: String?
-    /// `true`, pokud jsme při startu časovače spustili zkratku pro zapnutí Soustředění.
+    /// `true`, pokud „Nerušit“ zapnul časovač (a po skončení ho tedy zase vypne).
     @Published private(set) var focusActive = false
 
     private var endDate: Date?
     private var ticker: Timer?
     private var assertionID: IOPMAssertionID = 0
+    /// Požadavek na zapnutí „Nerušit“ v řetězu `FocusController` (kvůli správnému vypnutí).
+    private var enableRequest: Task<FocusChangeResult, Never>?
+    /// Zvyšuje se při každém zapnutí/vypnutí – zastaralé výsledky se ignorují.
+    private var focusSession: Int = 0
 
     /// 0…1, kolik času už uběhlo
     var progress: Double {
@@ -47,7 +51,7 @@ final class FocusTimer: ObservableObject {
         ticker = t
 
         if AppSettings.shared.focusWithTimer, !focusActive {
-            setFocus(on: true)
+            enableFocus()
         }
     }
 
@@ -60,7 +64,7 @@ final class FocusTimer: ObservableObject {
         total = 0
 
         if focusActive {
-            setFocus(on: false)
+            disableFocus()
         }
     }
 
@@ -73,34 +77,46 @@ final class FocusTimer: ObservableObject {
         }
     }
 
-    // MARK: - Soustředění přes Zkratky
+    // MARK: - Soustředění („Nerušit“)
 
-    private func setFocus(on: Bool) {
-        let settings = AppSettings.shared
-        let raw: String = on ? settings.focusOnShortcut : settings.focusOffShortcut
-        let name: String = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Při vypínání se stav ruší vždy; při zapínání až po úspěšné kontrole níže.
-        if !on { focusActive = false }
-
-        guard !name.isEmpty else {
-            focusError = on ? "Není nastavena zkratka pro zapnutí Soustředění" : "Není nastavena zkratka pro vypnutí Soustředění"
-            return
-        }
-
-        let store = ShortcutsStore.shared
-        if store.hasLoaded && !store.contains(name) {
-            focusError = "Zkratka „\(name)“ neexistuje"
-            return
-        }
-
+    /// Zapne „Nerušit“ přes `FocusController`. `focusActive` se nastaví hned, aby
+    /// `stop()` během probíhajícího zapínání vypnutí nevynechal. Požadavky se do řetězu
+    /// `FocusController` řadí synchronně, takže zapnutí → vypnutí → zapnutí proběhnou
+    /// přesně v tomto pořadí i při rychlém start/stop/start.
+    private func enableFocus() {
         focusError = nil
-        if on { focusActive = true }
-        store.runSilently(name) { [weak self] message in
-            guard let self else { return }
-            if message.localizedCaseInsensitiveContains("find") || message.localizedCaseInsensitiveContains("not found") {
-                self.focusError = "Zkratka „\(name)“ neexistuje"
-            } else {
-                self.focusError = "Soustředění: \(message)"
+        focusActive = true
+        focusSession &+= 1
+        let session = focusSession
+        let request: Task<FocusChangeResult, Never> = FocusController.shared.enqueue(true)
+        enableRequest = request
+        Task { @MainActor in
+            let result: FocusChangeResult = await request.value
+            // Mezitím časovač skončil / začal nový – o jeho stavu rozhoduje jiný požadavek.
+            guard session == self.focusSession else { return }
+            if !result.ok {
+                self.focusActive = false
+                self.enableRequest = nil
+                self.focusError = result.error ?? "Nerušit se nepodařilo zapnout"
+            } else if !result.changed {
+                // „Nerušit“ už bylo zapnuté uživatelem – po skončení ho nevypínat.
+                self.focusActive = false
+                self.enableRequest = nil
+            }
+        }
+    }
+
+    private func disableFocus() {
+        focusActive = false
+        focusSession &+= 1
+        let gate: Task<FocusChangeResult, Never>? = enableRequest
+        enableRequest = nil
+        // Vypnout jen to, co jsme opravdu zapnuli (rozhodne se až po dokončení zapínání).
+        let request: Task<FocusChangeResult, Never> = FocusController.shared.enqueue(false, onlyIfChangedBy: gate)
+        Task { @MainActor in
+            let result: FocusChangeResult = await request.value
+            if !result.ok {
+                self.focusError = result.error ?? "Nerušit se nepodařilo vypnout"
             }
         }
     }

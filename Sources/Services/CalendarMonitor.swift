@@ -70,6 +70,7 @@ final class CalendarMonitor: ObservableObject {
     private let store = EKEventStore()
     private let google: GoogleCalendarService
     private var timer: Timer?
+    private var fastTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     /// Je k dispozici aspoň jeden zdroj událostí (systémové kalendáře nebo Google).
@@ -123,6 +124,21 @@ final class CalendarMonitor: ObservableObject {
         }
         RunLoop.main.add(tick, forMode: .common)
         timer = tick
+
+        // Kolem začátku schůzky aktualizovat `now` každou vteřinu, aby odpočet v notchi
+        // nezůstal viset na „0 s“ (plný reload zůstává po 30 s).
+        let fastTick = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let current = Date()
+                let near = self.events.contains { e in
+                    !e.isAllDay && abs(e.start.timeIntervalSince(current)) < 70
+                }
+                if near { self.now = current }
+            }
+        }
+        RunLoop.main.add(fastTick, forMode: .common)
+        fastTimer = fastTick
     }
 
     func refreshAccess() {

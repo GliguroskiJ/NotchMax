@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// Nástroje: focus časovač s prstencem, předvolby, Soustředění (přes Zkratky)
+/// Nástroje: focus časovač s prstencem, předvolby, Soustředění (automatické „Nerušit“)
 /// a „nenechat Mac usnout“.
 struct ToolsView: View {
     @EnvironmentObject private var timer: FocusTimer
     @EnvironmentObject private var settings: AppSettings
-    @ObservedObject private var shortcuts = ShortcutsStore.shared
+    @ObservedObject private var focus = FocusController.shared
     @State private var selectedMinutes: Int = 25
 
     private let presets: [Int] = [5, 15, 25, 45, 60]
+    private let permissionTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(spacing: NotchLayout.spacingM) {
@@ -21,9 +22,10 @@ struct ToolsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            if settings.focusWithTimer && !shortcuts.hasLoaded {
-                shortcuts.reload()
-            }
+            focus.refreshPermission()
+        }
+        .onReceive(permissionTimer) { _ in
+            if settings.focusWithTimer { focus.refreshPermission() }
         }
     }
 
@@ -143,12 +145,25 @@ struct ToolsView: View {
                     .foregroundStyle(Color.white.opacity(0.55))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                if settings.focusWithTimer && focus.needsAccessibility {
+                    Spacer(minLength: 0)
+                    Button {
+                        MediaKeyInterceptor.shared.requestAccess()
+                        focus.refreshPermission()
+                    } label: {
+                        Text("Povolit")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(settings.accent.color)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Povolit NotchMaxu Zpřístupnění, aby mohl přepínat Nerušit")
+                }
             }
             .help(focusStatus.text)
         }
         .glassCard(padding: NotchLayout.spacingM)
         .onChange(of: settings.focusWithTimer) { _, isOn in
-            if isOn && !shortcuts.hasLoaded { shortcuts.reload() }
+            if isOn { focus.refreshPermission() }
             if !isOn && !timer.focusActive { timer.focusError = nil }
         }
     }
@@ -176,19 +191,16 @@ struct ToolsView: View {
         if !settings.focusWithTimer {
             return ("Vypnuto", Color.white.opacity(0.3))
         }
+        if focus.needsAccessibility {
+            return ("Potřebuje Zpřístupnění", Color.orange)
+        }
         if timer.focusError != nil {
             return ("Chyba – viz časovač", Color.orange)
         }
-        if !shortcuts.hasLoaded {
-            return (shortcuts.isReloading ? "Načítám zkratky…" : "Zkratky nenačteny", Color.white.opacity(0.3))
+        if timer.focusActive {
+            return ("Nerušit zapnuto s časovačem", Color.green)
         }
-        let on: String = settings.focusOnShortcut
-        let off: String = settings.focusOffShortcut
-        let missing: [String] = [on, off].filter { !shortcuts.contains($0) }
-        if missing.isEmpty {
-            return (timer.focusActive ? "Zapnuto s časovačem" : "Zkratky připraveny", Color.green)
-        }
-        return ("Chybí zkratka „\(missing[0])“", Color.orange)
+        return ("Připraveno – zapne Nerušit", Color.green)
     }
 }
 

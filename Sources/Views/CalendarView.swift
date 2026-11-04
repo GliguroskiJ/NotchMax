@@ -80,12 +80,27 @@ struct CalendarView: View {
             }
         } else {
             VStack(spacing: 10) {
-                EmptyState(symbol: "calendar", title: "Kalendář",
-                           message: calendar.access == .denied
-                               ? "Přístup ke kalendářům macOS je zamítnutý. Připoj Google nebo povol přístup v Nastavení."
-                               : "Připoj kalendáře macOS nebo se přihlas ke Google Kalendáři.")
-                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus") { openNotchMaxSettings(section: "calendar") }
+                VStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(CalendarConnectStyle.accent)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(CalendarConnectStyle.accent.opacity(0.18)))
+                    Text("Kalendář")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                    Text(calendar.access == .denied
+                         ? "Přístup ke kalendářům macOS je zamítnutý. Připoj Google nebo povol přístup v Nastavení."
+                         : "Připoj kalendáře macOS nebo se přihlas ke Google Kalendáři.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus",
+                          tint: CalendarConnectStyle.tint) { openNotchMaxSettings(section: "calendar") }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

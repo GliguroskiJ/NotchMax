@@ -136,8 +136,8 @@ final class AppSettings: ObservableObject {
             "notchOverhang": 2.0,
             "hotkeyEnabled": true,
             "shelfTTLHours": 24,
-            "tabAgents": true,
-            "liveClaude": true,
+            "tabAgents": false,
+            "liveClaude": false,
             "dualActivities": false,
             "leftActivity": ActivitySlot.music.rawValue,
             "rightActivity": ActivitySlot.timer.rawValue,
@@ -149,7 +149,7 @@ final class AppSettings: ObservableObject {
             "hudHeadphones": true,
             "hudFocus": true,
             "hudNotifications": false,
-            "hudClaude": true,
+            "hudClaude": false,
             "mirrorButton": true,
 
             "focusOnShortcut": "NotchMax Focus On",
@@ -198,6 +198,23 @@ final class AppSettings: ObservableObject {
         if tabTools { tabs.append(.tools) }
         if tabSystem { tabs.append(.system) }
         if tabAgents { tabs.append(.agents) }
-        return tabs
+        // Víc než 5 záložek by se v hlavičce schovalo za fyzický notch.
+        return Array(tabs.prefix(AppSettings.maxVisibleTabs))
+    }
+
+    /// Maximální počet záložek v hlavičce rozbaleného notche (včetně Domů).
+    static let maxVisibleTabs = 5
+
+    /// Text vysvětlující, proč nejde zapnout další záložku.
+    static let tabLimitNote = "Maximálně 5 záložek – jinak by se schovaly za notch. Nejdřív jinou vypni."
+
+    /// Počet zapnutých volitelných záložek (bez Domů).
+    var enabledOptionalTabCount: Int {
+        [tabCalendar, tabShelf, tabTools, tabSystem, tabAgents].filter { $0 }.count
+    }
+
+    /// Jestli jde zapnout další volitelnou záložku (Domů je vždy, takže max. 4 volitelné).
+    var canEnableMoreTabs: Bool {
+        enabledOptionalTabCount < AppSettings.maxVisibleTabs - 1
     }
 }

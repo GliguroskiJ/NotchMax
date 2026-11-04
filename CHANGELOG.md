@@ -2,6 +2,16 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.10
+Úpravy
+- Dvě aktivity vedle notche se vybírají automaticky: ukážou se ty dvě poslední, obě strany jsou stejně široké
+- Při dvou aktivitách je hudba jen obal alba; po pozastavení se notch vrátí do souměrného zobrazení
+- Časovač a schůzky ukazují odpočet v minutách, poslední minutu ve vteřinách
+- Focus časovač zapíná a vypíná Nerušit sám, bez aplikace Zkratky (potřebuje Zpřístupnění)
+- V panelu je nejvýš 5 záložek, aby se žádná neschovala za notch
+- Tlačítka pro připojení kalendáře jsou zelená
+- Agenti (záložka, aktivita i HUD) jsou ve výchozím stavu vypnutí
+
 ## 0.1.9
 Novinky
 - Hlasitost, jas displeje a podsvícení klávesnice se ukazují v notchi místo systémového HUD (potřebuje oprávnění Zpřístupnění)
