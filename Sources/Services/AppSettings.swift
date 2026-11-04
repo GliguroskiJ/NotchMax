@@ -1,5 +1,33 @@
 import SwiftUI
 
+/// Akcentní barva aplikace: libovolný odstín ze spektra, nebo bílá.
+/// Všechny views používají `settings.accent.color`.
+struct NotchAccent: Equatable {
+    /// Sytost a jas pro barevné odstíny – živé, ale ne neonové.
+    static let saturation: Double = 0.72
+    static let brightness: Double = 1.0
+
+    let hue: Double
+    let isWhite: Bool
+
+    init(hue: Double, isWhite: Bool = false) {
+        self.hue = min(max(hue, 0), 1)
+        self.isWhite = isWhite
+    }
+
+    var color: Color {
+        if isWhite { return .white }
+        return Color(hue: hue, saturation: NotchAccent.saturation, brightness: NotchAccent.brightness)
+    }
+
+    /// Barva daného odstínu (bez ohledu na volbu bílé) – pro náhledy a posuvník.
+    static func color(forHue hue: Double) -> Color {
+        Color(hue: min(max(hue, 0), 1), saturation: saturation, brightness: brightness)
+    }
+}
+
+/// Dřívější pevné akcentní barvy. Zůstává kvůli migraci uloženého nastavení
+/// a jako rychlé předvolby u posuvníku odstínu.
 enum AccentChoice: String, CaseIterable, Identifiable {
     case cyan, mint, violet, orange, white
 
@@ -15,15 +43,20 @@ enum AccentChoice: String, CaseIterable, Identifiable {
         }
     }
 
-    var color: Color {
+    /// Odstín (0…1), který nejlépe odpovídá původní barvě.
+    var hue: Double {
         switch self {
-        case .cyan: return .cyan
-        case .mint: return .mint
-        case .violet: return .purple
-        case .orange: return .orange
-        case .white: return .white
+        case .cyan: return 0.54
+        case .mint: return 0.47
+        case .violet: return 0.78
+        case .orange: return 0.08
+        case .white: return 0.54
         }
     }
+
+    var accent: NotchAccent { NotchAccent(hue: hue, isWhite: self == .white) }
+
+    var color: Color { accent.color }
 }
 
 /// Co se zobrazí na jedné straně notche, když je zapnutý režim dvou aktivit.
@@ -75,7 +108,10 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     @Published var hoverDelay: Double { didSet { UserDefaults.standard.set(hoverDelay, forKey: "hoverDelay") } }
-    @Published var accent: AccentChoice { didSet { UserDefaults.standard.set(accent.rawValue, forKey: "accent") } }
+    /// Odstín akcentní barvy (0…1 přes celé spektrum).
+    @Published var accentHue: Double { didSet { UserDefaults.standard.set(accentHue, forKey: "accentHue") } }
+    /// Bílá akcentní barva (sytost 0) místo odstínu.
+    @Published var accentWhite: Bool { didSet { UserDefaults.standard.set(accentWhite, forKey: "accentWhite") } }
     @Published var display: DisplayChoice { didSet { UserDefaults.standard.set(display.rawValue, forKey: "display") } }
     @Published var chargingAnimation: Bool { didSet { UserDefaults.standard.set(chargingAnimation, forKey: "chargingAnimation") } }
     @Published var liveBattery: Bool { didSet { UserDefaults.standard.set(liveBattery, forKey: "liveBattery") } }
@@ -121,7 +157,6 @@ final class AppSettings: ObservableObject {
         let d = UserDefaults.standard
         d.register(defaults: [
             "hoverDelay": 0.15,
-            "accent": AccentChoice.cyan.rawValue,
             "display": DisplayChoice.builtIn.rawValue,
             "chargingAnimation": true,
             "liveBattery": true,
@@ -132,8 +167,8 @@ final class AppSettings: ObservableObject {
             "tabShelf": true,
             "tabTools": true,
             "tabSystem": true,
-            "notchOffsetY": 2.0,
-            "notchOverhang": 2.0,
+            "notchOffsetY": AppSettings.defaultNotchOffsetY,
+            "notchOverhang": AppSettings.defaultNotchOverhang,
             "hotkeyEnabled": true,
             "shelfTTLHours": 24,
             "tabAgents": false,
@@ -141,8 +176,8 @@ final class AppSettings: ObservableObject {
             "dualActivities": false,
             "leftActivity": ActivitySlot.music.rawValue,
             "rightActivity": ActivitySlot.timer.rawValue,
-            "chargeInsetLeft": 0.0,
-            "chargeInsetRight": 0.0,
+            "chargeInsetLeft": AppSettings.defaultChargeInset,
+            "chargeInsetRight": AppSettings.defaultChargeInset,
             "focusWithTimer": false,
             "hudReplaceSystem": true,
             "hudMedia": true,
@@ -156,7 +191,17 @@ final class AppSettings: ObservableObject {
             "focusOffShortcut": "NotchMax Focus Off"
         ])
         hoverDelay = d.double(forKey: "hoverDelay")
-        accent = AccentChoice(rawValue: d.string(forKey: "accent") ?? "") ?? .cyan
+        if let storedHue = d.object(forKey: "accentHue") as? Double {
+            accentHue = min(max(storedHue, 0), 1)
+            accentWhite = d.bool(forKey: "accentWhite")
+        } else {
+            // Migrace z dřívější pevné volby (`accent` = cyan/mint/violet/orange/white).
+            let legacy = AccentChoice(rawValue: d.string(forKey: "accent") ?? "") ?? .cyan
+            accentHue = legacy.hue
+            accentWhite = legacy == .white
+            d.set(legacy.hue, forKey: "accentHue")
+            d.set(legacy == .white, forKey: "accentWhite")
+        }
         display = DisplayChoice(rawValue: d.string(forKey: "display") ?? "") ?? .builtIn
         chargingAnimation = d.bool(forKey: "chargingAnimation")
         liveBattery = d.bool(forKey: "liveBattery")
@@ -189,6 +234,27 @@ final class AppSettings: ObservableObject {
         hudClaude = d.bool(forKey: "hudClaude")
         mirrorButton = d.bool(forKey: "mirrorButton")
         hiddenCalendarIDs = d.stringArray(forKey: "hiddenCalendarIDs") ?? []
+    }
+
+    /// Aktuální akcentní barva (`settings.accent.color`).
+    var accent: NotchAccent { NotchAccent(hue: accentHue, isWhite: accentWhite) }
+
+    // MARK: Výchozí hodnoty polohy notche a obrysu nabíjení
+
+    static let defaultNotchOffsetY: Double = 0
+    static let defaultNotchOverhang: Double = 1
+    static let defaultChargeInset: Double = 0
+
+    /// Vrátí posun a přesah notche na výchozí hodnoty.
+    func resetNotchGeometry() {
+        notchOffsetY = AppSettings.defaultNotchOffsetY
+        notchOverhang = AppSettings.defaultNotchOverhang
+    }
+
+    /// Vrátí zúžení obrysu nabíjení na výchozí hodnoty.
+    func resetChargeInsets() {
+        chargeInsetLeft = AppSettings.defaultChargeInset
+        chargeInsetRight = AppSettings.defaultChargeInset
     }
 
     var visibleTabs: [NotchTab] {

@@ -8,6 +8,8 @@ struct ClaudeSettingsSection: View {
     @State private var errorMessage: String?
     @State private var infoMessage: String?
 
+    init() {}
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard(header: "Zobrazení") {
@@ -25,28 +27,21 @@ struct ClaudeSettingsSection: View {
                             subtitle: monitor.hooksInstalled
                                 ? "Nainstalováno – NotchMax ví přesně, kdy Claude pracuje, dokončí tah nebo čeká na povolení."
                                 : "Nenainstalováno – stav se odhaduje jen z transkriptů, takže „čeká na tebe“ se nepozná.") {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(monitor.hooksInstalled ? Color.green : Color.white.opacity(0.3))
-                            .frame(width: 8, height: 8)
-                        Text(monitor.hooksInstalled ? "Aktivní" : "Neaktivní")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.75))
-                    }
+                    PermissionStatusBadge(text: monitor.hooksInstalled ? "Aktivní" : "Neaktivní",
+                                          color: monitor.hooksInstalled ? Color.green : Color.white.opacity(0.3))
                 }
                 SettingsDivider()
-                SettingsRow(title: monitor.hooksInstalled ? "Odinstalovat hooky" : "Instalovat hooky",
-                            subtitle: "Upraví ~/.claude/settings.json (původní obsah zůstane, záloha v settings.json.notchmax-backup). Platí pro nově spuštěné relace.") {
-                    HStack(spacing: 8) {
-                        if monitor.hooksInstalled {
-                            Button("Přeinstalovat") { install() }
-                                .controlSize(.regular)
-                            Button("Odinstalovat hooky", role: .destructive) { uninstall() }
-                                .controlSize(.regular)
-                        } else {
-                            Button("Instalovat hooky") { install() }
-                                .controlSize(.regular)
-                        }
+                SettingsActionRow(title: monitor.hooksInstalled ? "Spravovat hooky" : "Instalovat hooky",
+                                  subtitle: "Upraví ~/.claude/settings.json (původní obsah zůstane, záloha v settings.json.notchmax-backup). Platí pro nově spuštěné relace.") {
+                    if monitor.hooksInstalled {
+                        GlassPill(title: "Přeinstalovat", symbol: "arrow.clockwise") { install() }
+                            .fixedSize()
+                        GlassPill(title: "Odinstalovat", symbol: "trash", tint: Color.red.opacity(0.3)) { uninstall() }
+                            .fixedSize()
+                    } else {
+                        GlassPill(title: "Instalovat hooky", symbol: "square.and.arrow.down",
+                                  tint: settings.accent.color.opacity(0.35)) { install() }
+                            .fixedSize()
                     }
                 }
                 if let errorMessage {
@@ -72,12 +67,12 @@ struct ClaudeSettingsSection: View {
             }
 
             SettingsCard(header: "Relace") {
-                SettingsRow(title: "Nalezené relace",
-                            subtitle: "Za posledních 24 hodin: \(monitor.sessions.count) · pracuje \(monitor.workingCount) · čeká \(monitor.waitingCount)") {
-                    HStack(spacing: 8) {
-                        Button("Obnovit") { monitor.refresh() }
-                        Button("Otevřít ~/.claude") { openClaudeFolder() }
-                    }
+                SettingsActionRow(title: "Nalezené relace",
+                                  subtitle: "Za posledních 24 hodin: \(monitor.sessions.count) · pracuje \(monitor.workingCount) · čeká \(monitor.waitingCount)") {
+                    GlassPill(title: "Obnovit", symbol: "arrow.clockwise") { monitor.refresh() }
+                        .fixedSize()
+                    GlassPill(title: "Otevřít ~/.claude", symbol: "folder") { openClaudeFolder() }
+                        .fixedSize()
                 }
                 SettingsDivider()
                 SettingsNote(symbol: "eye.slash",

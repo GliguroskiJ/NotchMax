@@ -3,6 +3,8 @@ import Combine
 
 /// Převádí změny přehrávání (MediaMonitor) a stisky mediálních kláves (MediaKeyInterceptor)
 /// na krátké HUD animace v notchi (play / pauza / další / předchozí).
+/// HUD neukazuje žádný text – titul slouží jen jako spouštěč (změna skladby) a pro odfiltrování duplicit;
+/// zobrazuje se výměna obalu alba, proto si most pamatuje předchozí obal.
 @MainActor
 final class MediaHUDBridge {
     static let shared = MediaHUDBridge()
@@ -18,6 +20,10 @@ final class MediaHUDBridge {
     private static let toggleFallbackDelay: TimeInterval = 0.8
     /// Po přeskočení skladby přehrávače krátce hlásí pauza → přehrávání; to se jako play/pauza neukazuje.
     private static let skipQuietWindow: TimeInterval = 1.2
+    /// Jak dlouho po změně skladby počkat na obal alba, než se HUD ukáže i bez něj.
+    private static let artworkWait: TimeInterval = 1.0
+    /// Jak dlouho po výměně obalu se považuje za „čerstvou“ (HUD začne starým obalem a otočí ho).
+    private static let artworkFreshWindow: TimeInterval = 2.0
 
     private var cancellables = Set<AnyCancellable>()
     private var started = false
@@ -31,6 +37,18 @@ final class MediaHUDBridge {
     private var lastPlayPauseShown = Date.distantPast
     private var lastShown: [String: Date] = [:]
     private var toggleTask: Task<Void, Never>?
+    private var trackTask: Task<Void, Never>?
+    private var artworkChangedAt = Date.distantPast
+
+    /// Poslední známý (nenulový) obal alba – během načítání obalu nové skladby zůstává starý.
+    private(set) var lastArtwork: NSImage?
+    /// Obal, který byl vidět před posledním obalem (pro animaci výměny).
+    private(set) var previousArtwork: NSImage?
+
+    /// Obal se vyměnil před chvílí (HUD má začít předchozím obalem).
+    var artworkChangedRecently: Bool {
+        Date().timeIntervalSince(artworkChangedAt) < Self.artworkFreshWindow
+    }
 
     private init() {}
 
@@ -41,6 +59,12 @@ final class MediaHUDBridge {
         let media = AppServices.shared.media
         lastTitle = media.title
         lastIsPlaying = media.isPlaying
+        lastArtwork = media.artwork
+
+        // Bez receive(on:) – předchozí obal musí být uložený dřív, než se HUD vykreslí.
+        media.$artwork
+            .sink { [weak self] image in self?.artworkChanged(image) }
+            .store(in: &cancellables)
 
         // receive(on:) → hodnoty zpracujeme až po dokončení aktualizace MediaMonitoru
         // (title i isPlaying jsou pak už oba nastavené).
@@ -106,7 +130,31 @@ final class MediaHUDBridge {
         let media = AppServices.shared.media
         guard media.isPlaying else { return }
         let isPrevious = Date().timeIntervalSince(lastPreviousKey) < Self.previousWindow
-        emit(isPrevious ? .previous : .next, title: title, artist: media.artist, ignoreGrace: false)
+        let action: MediaAction = isPrevious ? .previous : .next
+        // HUD ukazuje výměnu obalu → počkat (krátce), až se obal nové skladby načte.
+        trackTask?.cancel()
+        trackTask = Task { @MainActor [weak self] in
+            var waited: TimeInterval = 0
+            while AppServices.shared.media.artwork == nil, waited < Self.artworkWait {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                if Task.isCancelled { return }
+                waited += 0.05
+            }
+            guard !Task.isCancelled, let self else { return }
+            let m = AppServices.shared.media
+            // Mezitím se skladba znovu změnila → ukáže ji další volání.
+            guard m.title == title else { return }
+            self.emit(action, title: title, artist: m.artist, ignoreGrace: false)
+        }
+    }
+
+    private func artworkChanged(_ image: NSImage?) {
+        // Nil = obal nové skladby se načítá (nebo přehrávač skončil) – starý zůstává jako poslední známý.
+        guard let image else { return }
+        if let last = lastArtwork, last === image { return }
+        previousArtwork = lastArtwork
+        lastArtwork = image
+        artworkChangedAt = Date()
     }
 
     // MARK: - Výstup

@@ -49,19 +49,23 @@ final class MediaKeyInterceptor {
 
     var isTrusted: Bool { AXIsProcessTrusted() }
 
-    /// Zobrazí systémový dialog s žádostí o oprávnění Zpřístupnění.
+    /// Zobrazí systémový dialog s žádostí o oprávnění Zpřístupnění a otevře příslušný
+    /// panel Nastavení systému. (Pokud už NotchMax v seznamu je – i se starým podpisem –
+    /// macOS dialog znovu neukáže, proto panel otevíráme vždy, když přístup chybí.)
     func requestAccess() {
         // Hodnota kAXTrustedCheckOptionPrompt; literál obchází rozdíly v importu (Unmanaged vs. CFString) mezi SDK.
         let key = "AXTrustedCheckOptionPrompt"
         let options = [key: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        if !trusted {
+            openAccessibilitySettings()
+        }
+        // Je-li funkce zapnutá a přístup chybí, updateState spustí hlídání oprávnění.
         updateState()
     }
 
     func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+        SystemSettingsLink.open(.accessibility)
     }
 
     /// Je event tap aktivní?

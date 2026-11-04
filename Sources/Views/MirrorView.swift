@@ -71,9 +71,7 @@ struct MirrorView: View {
                        title: "Přístup ke kameře je zakázán",
                        message: "Povol NotchMaxu kameru v Nastavení systému → Soukromí a zabezpečení → Kamera.")
             GlassPill(title: "Otevřít nastavení", symbol: "gearshape") {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
-                    NSWorkspace.shared.open(url)
-                }
+                SystemSettingsLink.open(.camera)
             }
         }
         .glassCard()

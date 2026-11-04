@@ -12,7 +12,7 @@ struct CalEvent: Identifiable, Equatable {
     let color: Color
     let location: String?
     let joinURL: URL?
-    /// Identifikátor kalendáře (EKCalendar.calendarIdentifier, nebo ID Google kalendáře).
+    /// Identifikátor kalendáře (EKCalendar.calendarIdentifier).
     var calendarID: String = ""
 }
 
@@ -50,9 +50,8 @@ enum MeetingLink {
     }
 }
 
-/// Události ze dvou zdrojů:
-/// 1. EventKit – kalendáře z macOS (iCloud, Google účet přidaný v Internetových účtech…),
-/// 2. přímé přihlášení ke Google Kalendáři (`GoogleCalendarService`).
+/// Události z kalendářů macOS přes EventKit (iCloud, Exchange, Google účet přidaný
+/// v Nastavení systému → Internetové účty…).
 @MainActor
 final class CalendarMonitor: ObservableObject {
     enum Access { case unknown, granted, denied }
@@ -61,24 +60,19 @@ final class CalendarMonitor: ObservableObject {
     @Published private(set) var access: Access = .unknown
     /// macOS povolil jen zápis do kalendáře – události číst nejde.
     @Published private(set) var isWriteOnly = false
-    /// Je připojený Google Kalendář přímo (OAuth)?
-    @Published private(set) var googleConnected = false
     @Published private(set) var events: [CalEvent] = []
     @Published private(set) var calendarGroups: [SystemCalendarGroup] = []
     @Published private(set) var now = Date()
 
     private let store = EKEventStore()
-    private let google: GoogleCalendarService
     private var timer: Timer?
     private var fastTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
-    /// Je k dispozici aspoň jeden zdroj událostí (systémové kalendáře nebo Google).
-    var hasAnySource: Bool { access == .granted || googleConnected }
+    /// Je k dispozici zdroj událostí (přístup ke kalendářům macOS povolen).
+    var hasAnySource: Bool { access == .granted }
 
     init() {
-        google = GoogleCalendarService.shared
-        googleConnected = google.isSignedIn
         refreshAccess()
 
         NotificationCenter.default.addObserver(
@@ -89,26 +83,9 @@ final class CalendarMonitor: ObservableObject {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshAccess()
-                self?.google.refreshIfStale()
-            }
+            Task { @MainActor in self?.refreshAccess() }
         }
 
-        google.$isSignedIn
-            .removeDuplicates()
-            .sink { [weak self] signedIn in
-                Task { @MainActor in
-                    self?.googleConnected = signedIn
-                    self?.reload()
-                }
-            }
-            .store(in: &cancellables)
-        google.$events
-            .sink { [weak self] _ in
-                Task { @MainActor in self?.reload() }
-            }
-            .store(in: &cancellables)
         AppSettings.shared.$hiddenCalendarIDs
             .removeDuplicates()
             .sink { [weak self] _ in
@@ -183,15 +160,11 @@ final class CalendarMonitor: ObservableObject {
     }
 
     static func openPrivacySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
-            NSWorkspace.shared.open(url)
-        }
+        SystemSettingsLink.open(.calendars)
     }
 
     static func openInternetAccounts() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        }
+        SystemSettingsLink.open(.internetAccounts)
     }
 
     func reload() {
@@ -228,18 +201,7 @@ final class CalendarMonitor: ObservableObject {
             calendarGroups = []
         }
 
-        // Google Kalendář (přímé přihlášení)
-        var googleEvents: [CalEvent] = []
-        if google.isSignedIn {
-            googleEvents = google.events.filter {
-                !hidden.contains(GoogleCalendarService.hiddenKey(for: $0.calendarID))
-            }
-        }
-
-        // Stejný Google kalendář může být i v EventKit (Internetové účty) – duplicity vyřadíme,
-        // přednost má verze z Google API (má spolehlivější odkaz na Meet).
-        let googleKeys = Set(googleEvents.map { Self.dedupeKey($0) })
-        let merged = (googleEvents + systemEvents.filter { !googleKeys.contains(Self.dedupeKey($0)) })
+        let merged = systemEvents
             .filter { $0.end > current }
             .sorted { lhs, rhs in
                 if lhs.start != rhs.start { return lhs.start < rhs.start }
@@ -305,12 +267,6 @@ final class CalendarMonitor: ObservableObject {
         case .birthdays: return "Kontakty"
         @unknown default: return ""
         }
-    }
-
-    nonisolated private static func dedupeKey(_ event: CalEvent) -> String {
-        let title = event.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let minute = Int((event.start.timeIntervalSince1970 / 60).rounded())
-        return "\(title)|\(minute)|\(event.isAllDay)"
     }
 
     /// Nejbližší (nebo právě probíhající) událost s časem.

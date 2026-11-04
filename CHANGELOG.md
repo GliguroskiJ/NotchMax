@@ -2,6 +2,22 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.11
+Úpravy
+- Zavřený notch je čistě černý; po rozbalení svítí podle obalu alba nebo zvolené barvy
+- Dvě aktivity: hudba jen obal alba, časovač a schůzka jen číslo, obě strany stejně široké
+- Odpočet ukazuje stejné minuty jako časovač, poslední minutu vteřiny
+- Hlasitost a jas: jednoduchý pruh pod notchem
+- Změna skladby: jen animace přepnutí obalu alba, bez textu
+- Domovská stránka: menší přehrávač se třemi skleněnými tlačítky, širší kalendář a baterie
+- Časovač: 5, 15, 30, 45, 60, 90, 120 a 180 minut ve větší mřížce
+- Barva zvýraznění na posuvníku přes celé spektrum
+- Přeorganizované nastavení včetně nové stránky Oprávnění a testovacího oznámení
+- Opravená tlačítka pro otevření Nastavení systému a detekce plného přístupu k disku
+- Tlačítka okna nastavení jsou zarovnaná s rohem jako v aplikacích Applu
+- Odebráno přímé přihlášení Google účtu (kalendáře z macOS zůstávají)
+- Výchozí poloha notche: posun 0, přesah 1 px
+
 ## 0.1.10
 Úpravy
 - Dvě aktivity vedle notche se vybírají automaticky: ukážou se ty dvě poslední, obě strany jsou stejně široké

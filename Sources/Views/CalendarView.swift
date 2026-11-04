@@ -90,8 +90,8 @@ struct CalendarView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.85))
                     Text(calendar.access == .denied
-                         ? "Přístup ke kalendářům macOS je zamítnutý. Připoj Google nebo povol přístup v Nastavení."
-                         : "Připoj kalendáře macOS nebo se přihlas ke Google Kalendáři.")
+                         ? "Přístup ke kalendářům macOS je zamítnutý. Povol ho v Nastavení."
+                         : "Připoj kalendáře macOS – iCloud, Google i další účty.")
                         .font(.system(size: 10.5))
                         .foregroundStyle(Color.white.opacity(0.5))
                         .multilineTextAlignment(.center)

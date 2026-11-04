@@ -7,7 +7,6 @@ struct FocusSettingsSection: View {
     @EnvironmentObject private var settings: AppSettings
     @ObservedObject private var focus = FocusController.shared
 
-    @State private var accessibilityTrusted: Bool = false
     @State private var isTesting = false
     @State private var testResult: String?
     @State private var testSucceeded = false
@@ -28,28 +27,10 @@ struct FocusSettingsSection: View {
             }
 
             SettingsCard(header: "Oprávnění") {
-                SettingsRow(title: "Zpřístupnění",
-                            subtitle: accessibilityTrusted
-                                ? "NotchMax může přepínat Nerušit přes Ovládací centrum."
-                                : "Bez oprávnění Zpřístupnění nejde Nerušit přepnout.") {
-                    if accessibilityTrusted {
-                        statusBadge(text: "Povoleno", color: .green)
-                    } else {
-                        HStack(spacing: 8) {
-                            Button("Povolit přístupnost") {
-                                MediaKeyInterceptor.shared.requestAccess()
-                                refreshPermissions()
-                            }
-                            .controlSize(.regular)
-                            GlassPill(title: "Otevřít nastavení", symbol: "gearshape") {
-                                MediaKeyInterceptor.shared.openAccessibilitySettings()
-                            }
-                        }
-                    }
-                }
+                PermissionRow(kind: .accessibility, compact: true)
                 SettingsDivider()
                 SettingsNote(symbol: "info.circle",
-                             text: "NotchMax na okamžik otevře v menu baru Soustředění (nebo Ovládací centrum), přepne „Nerušit“ a menu zase zavře. Aplikace není podepsaná vývojářským certifikátem, takže po aktualizaci může být potřeba Zpřístupnění odebrat a povolit znovu.")
+                             text: "NotchMax na okamžik otevře v menu baru Soustředění (nebo Ovládací centrum), přepne „Nerušit“ a menu zase zavře. Bez oprávnění Zpřístupnění to nejde. Po aktualizaci nepodepsaného sestavení může být potřeba NotchMax v seznamu Zpřístupnění odebrat (−) a přidat znovu (+).")
             }
 
             SettingsCard(header: "Vyzkoušet") {
@@ -63,9 +44,11 @@ struct FocusSettingsSection: View {
                         GlassPill(title: "Vyzkoušet", symbol: "moon.fill") {
                             runTest()
                         }
+                        .fixedSize()
                         .disabled(isTesting)
                         .opacity(isTesting ? 0.5 : 1)
                     }
+                    .fixedSize()
                 }
                 if let error = focus.lastError, !isTesting, !testSucceeded {
                     SettingsDivider()
@@ -86,8 +69,7 @@ struct FocusSettingsSection: View {
     }
 
     private func refreshPermissions() {
-        let trusted = MediaKeyInterceptor.shared.isTrusted
-        if trusted != accessibilityTrusted { accessibilityTrusted = trusted }
+        PermissionCenter.shared.refresh()
         focus.refreshPermission()
     }
 
@@ -121,17 +103,6 @@ struct FocusSettingsSection: View {
                 testResult = "Zapnutí fungovalo, vypnutí ne: \(offResult.error ?? "neznámá chyba")"
             }
             isTesting = false
-        }
-    }
-
-    private func statusBadge(text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 6, height: 6)
-            Text(text)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.7))
         }
     }
 }

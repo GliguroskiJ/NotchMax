@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreImage
 
 enum LiveActivity: Hashable {
     case timer
@@ -16,7 +17,8 @@ enum SidePiece: Hashable {
     case icon(LiveActivity)
     /// Jen detail (jedna aktivita rozdělená na obě strany – pravá část).
     case detail(LiveActivity)
-    /// Samostatný widget ikona + detail (režim dvou aktivit).
+    /// Jediný co nejužší prvek aktivity (režim dvou aktivit): obal alba, číslo odpočtu,
+    /// nebo ikona / odznak Clauda.
     case widget(LiveActivity)
 }
 
@@ -40,7 +42,9 @@ enum CompactMetrics {
     static let dotSpacing: CGFloat = 4
     static let claudeColor = Color(red: 0.85, green: 0.47, blue: 0.34)
     /// Nejširší běžný text odpočtu – podle něj se měří šířka, aby se tvar každou sekundu necukal.
-    static let counterTemplate = "00 min"
+    static let counterTemplate = "00"
+    /// Průhlednost sekund v poslední minutě (odliší je od minut).
+    static let secondsOpacity: Double = 0.72
 
     /// Šířka textu v písmu live activity (zaoblené, číslice stejně široké) + malá rezerva.
     static func textWidth(_ string: String, size: CGFloat = 11, weight: NSFont.Weight = .semibold) -> CGFloat {
@@ -64,16 +68,67 @@ enum CompactMetrics {
         return CGFloat(n) * dotSize + CGFloat(n - 1) * dotSpacing
     }
 
-    /// Odpočet: od 60 s výš jen minuty (zaokrouhlené nahoru), v poslední minutě jen sekundy.
-    static func countdownText(_ seconds: TimeInterval) -> String {
-        let secs: Int = max(0, Int(ceil(seconds)))
-        if secs >= 60 { return "\((secs + 59) / 60) min" }
-        return "\(secs) s"
+    /// Odpočet jako samotné číslo: od 60 s výš celé minuty (stejně jako ukazuje časovač,
+    /// tj. 22:40 → „22“), v poslední minutě sekundy (`isSeconds`).
+    static func countdown(_ seconds: TimeInterval) -> CountdownValue {
+        let raw: Double = seconds.isFinite ? seconds : 0
+        let secs: Int = max(0, Int(ceil(raw)))
+        if secs >= 60 { return CountdownValue(text: "\(secs / 60)", isSeconds: false) }
+        return CountdownValue(text: "\(secs)", isSeconds: true)
     }
 
-    /// Šířka odpočtu – vždy aspoň pro „00 min“, aby se neměnila s každým tikem.
+    /// Šířka odpočtu – vždy aspoň pro „00“, aby se neměnila s každým tikem (třímístná čísla rozšíří).
     static func counterWidth(_ string: String) -> CGFloat {
         max(textWidth(counterTemplate), textWidth(string))
+    }
+}
+
+/// Hodnota odpočtu v live activity.
+struct CountdownValue: Equatable {
+    let text: String
+    /// true = poslední minuta, číslo jsou sekundy.
+    let isSeconds: Bool
+}
+
+/// Průměrná barva obalu alba – počítá se jednou pro každý obrázek (výsledek se pamatuje).
+@MainActor
+enum ArtworkTint {
+    private static var lastImage: NSImage?
+    private static var lastColor: Color?
+    private static let context = CIContext(options: [.workingColorSpace: NSNull()])
+
+    static func color(for image: NSImage) -> Color? {
+        if let last = lastImage, last === image { return lastColor }
+        let color = compute(image)
+        lastImage = image
+        lastColor = color
+        return color
+    }
+
+    private static func compute(_ image: NSImage) -> Color? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let input = CIImage(cgImage: cg)
+        guard !input.extent.isEmpty,
+              let filter = CIFilter(name: "CIAreaAverage",
+                                    parameters: [kCIInputImageKey: input,
+                                                 kCIInputExtentKey: CIVector(cgRect: input.extent)]),
+              let output = filter.outputImage else { return nil }
+        var pixel: [UInt8] = [0, 0, 0, 0]
+        context.render(output, toBitmap: &pixel, rowBytes: 4,
+                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                       format: .RGBA8, colorSpace: nil)
+        let average = NSColor(srgbRed: CGFloat(pixel[0]) / 255,
+                              green: CGFloat(pixel[1]) / 255,
+                              blue: CGFloat(pixel[2]) / 255,
+                              alpha: 1)
+        // Průměr bývá kalný – trochu zvýšit sytost a jas, aby záře byla barevná.
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        average.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        let tuned = NSColor(hue: h,
+                            saturation: min(s * 1.35, 0.9),
+                            brightness: min(max(b, 0.55) * 1.1, 1),
+                            alpha: 1)
+        return Color(nsColor: tuned)
     }
 }
 
@@ -188,7 +243,7 @@ struct NotchRootView: View {
                             leftWidth: width, rightWidth: width)
     }
 
-    /// Dvě aktivity: každá strana je samostatný widget, obě strany stejně široké,
+    /// Dvě aktivity: každá strana ukazuje jediný prvek aktivity, obě strany stejně široké,
     /// takže tvar zůstává symetrický kolem fyzického notche.
     private func dualLayout(older: LiveActivity, newer: LiveActivity) -> ClosedLayout {
         let left = SidePiece.widget(older)
@@ -216,25 +271,39 @@ struct NotchRootView: View {
         case .icon:
             return NotchLayout.compactIcon
         case .detail(let a):
-            return detailWidth(a, inWidget: false)
+            return detailWidth(a)
         case .widget(let a):
-            let d = detailWidth(a, inWidget: true)
-            return NotchLayout.compactIcon + (d > 0 ? NotchLayout.compactGap + d : 0)
+            return soloWidth(a)
         }
     }
 
-    private func detailWidth(_ activity: LiveActivity, inWidget: Bool) -> CGFloat {
+    /// Šířka detailu (pravá strana jedné aktivity).
+    private func detailWidth(_ activity: LiveActivity) -> CGFloat {
         switch activity {
         case .music:
-            // Ve dvojici aktivit je hudba jen obal alba, bez ekvalizéru.
-            return inWidget ? 0 : CompactMetrics.equalizerWidth
+            return CompactMetrics.equalizerWidth
         case .timer:
-            return CompactMetrics.counterWidth(CompactMetrics.countdownText(timer.remaining))
+            return CompactMetrics.counterWidth(CompactMetrics.countdown(timer.remaining).text)
         case .meeting:
+            // Do schůzky zbývá nejvýš 10 minut → vždy nejvýš dvě číslice.
             return CompactMetrics.counterWidth(CompactMetrics.counterTemplate)
         case .claude:
+            return CompactMetrics.badgeWidth(claude.waitingCount > 0 ? claude.waitingCount : max(claude.activeCount, 1))
+        case .privacy:
+            return 0
+        }
+    }
+
+    /// Šířka jediného prvku aktivity v režimu dvou aktivit.
+    private func soloWidth(_ activity: LiveActivity) -> CGFloat {
+        switch activity {
+        case .music:
+            return NotchLayout.compactIcon
+        case .timer, .meeting:
+            return detailWidth(activity)
+        case .claude:
             if claude.waitingCount > 0 { return CompactMetrics.badgeWidth(claude.waitingCount) }
-            return inWidget ? 0 : CompactMetrics.badgeWidth(max(claude.activeCount, 1))
+            return NotchLayout.compactIcon
         case .privacy:
             return 0
         }
@@ -380,15 +449,15 @@ struct CompactActivity: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Levá strana: obsah zarovnaný k vnějšímu (zaoblenému) okraji.
+    /// Levá strana: obsah uprostřed své oblasti (obě strany jsou stejně široké → symetrie).
     @ViewBuilder private var leftSide: some View {
         if let piece = layout.left, layout.leftWidth > 0 {
-            HStack(spacing: 0) {
+            ZStack {
                 pieceView(piece)
                     .id(piece)
                     .transition(pieceTransition)
-                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity)
             .padding(.leading, NotchLayout.compactOuterPadding)
             .padding(.trailing, NotchLayout.compactInnerPadding)
         } else {
@@ -396,15 +465,19 @@ struct CompactActivity: View {
         }
     }
 
-    /// Pravá strana: obsah zarovnaný k vnějšímu okraji, tečky soukromí úplně vpravo.
+    /// Pravá strana: obsah uprostřed své oblasti, tečky soukromí úplně vpravo.
     @ViewBuilder private var rightSide: some View {
         if layout.rightWidth > 0 {
             HStack(spacing: 0) {
-                Spacer(minLength: 0)
                 if let piece = layout.right {
-                    pieceView(piece)
-                        .id(piece)
-                        .transition(pieceTransition)
+                    ZStack {
+                        pieceView(piece)
+                            .id(piece)
+                            .transition(pieceTransition)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Spacer(minLength: 0)
                 }
                 if layout.showsPrivacy {
                     PrivacyDots()
@@ -423,23 +496,28 @@ struct CompactActivity: View {
         case .icon(let a):
             icon(a)
         case .detail(let a):
-            detail(a, inWidget: false)
+            detail(a)
         case .widget(let a):
-            HStack(spacing: NotchLayout.compactGap) {
-                icon(a)
-                if hasDetail(a, inWidget: true) {
-                    detail(a, inWidget: true)
-                }
-            }
+            solo(a)
         }
     }
 
-    private func hasDetail(_ activity: LiveActivity, inWidget: Bool) -> Bool {
+    /// Jediný prvek aktivity v režimu dvou aktivit: hudba = obal alba, časovač / schůzka = jen číslo,
+    /// Claude = jen ikona (nebo odznak s počtem čekajících).
+    @ViewBuilder private func solo(_ activity: LiveActivity) -> some View {
         switch activity {
-        case .music: return !inWidget
-        case .claude: return claude.waitingCount > 0 || !inWidget
-        case .privacy: return false
-        case .timer, .meeting: return true
+        case .music:
+            icon(activity)
+        case .timer, .meeting:
+            detail(activity)
+        case .claude:
+            if claude.waitingCount > 0 {
+                CompactCountBadge(count: claude.waitingCount, fill: Color.orange)
+            } else {
+                icon(activity)
+            }
+        case .privacy:
+            EmptyView()
         }
     }
 
@@ -454,7 +532,6 @@ struct CompactActivity: View {
                     .scaledToFill()
                     .frame(width: NotchLayout.compactIcon, height: NotchLayout.compactIcon)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    .shadow(color: Color.black.opacity(0.4), radius: 2, x: 0, y: 1)
             } else {
                 symbol("music.note", color: settings.accent.color)
             }
@@ -479,23 +556,27 @@ struct CompactActivity: View {
 
     // MARK: Detaily
 
-    @ViewBuilder private func detail(_ activity: LiveActivity, inWidget: Bool) -> some View {
+    @ViewBuilder private func detail(_ activity: LiveActivity) -> some View {
         switch activity {
         case .music:
             EqualizerBars(color: settings.accent.color, active: media.isPlaying)
                 .frame(width: CompactMetrics.equalizerWidth)
         case .timer:
-            compactText(CompactMetrics.countdownText(timer.remaining), color: Color.white)
+            // Minuty bíle, sekundy poslední minuty v barvě zvýraznění (jasné, že jde o sekundy).
+            compactNumber(CompactMetrics.countdown(timer.remaining),
+                          color: Color.white,
+                          secondsColor: settings.accent.color)
         case .meeting(let start):
             // Odpočet do schůzky tiká každou sekundu jen po dobu, kdy je aktivita vidět.
             TimelineView(.periodic(from: Date(), by: 1)) { context in
-                compactText(CompactMetrics.countdownText(start.timeIntervalSince(context.date)),
-                            color: Color.orange)
+                compactNumber(CompactMetrics.countdown(start.timeIntervalSince(context.date)),
+                              color: Color.orange,
+                              secondsColor: Color.orange.opacity(CompactMetrics.secondsOpacity))
             }
         case .claude:
             if claude.waitingCount > 0 {
                 CompactCountBadge(count: claude.waitingCount, fill: Color.orange)
-            } else if !inWidget {
+            } else {
                 CompactCountBadge(count: max(claude.activeCount, 1), fill: Color.white.opacity(0.2))
             }
         case .privacy:
@@ -503,15 +584,18 @@ struct CompactActivity: View {
         }
     }
 
-    private func compactText(_ string: String, color: Color) -> some View {
-        Text(string)
+    /// Číslo odpočtu. Šířka je pevná (aspoň pro „00“), aby se tvar při tikání necukal;
+    /// sekundy poslední minuty mají jinou barvu / průhlednost.
+    private func compactNumber(_ value: CountdownValue, color: Color, secondsColor: Color) -> some View {
+        Text(value.text)
             .font(.system(size: CompactMetrics.fontSize, weight: .semibold, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(color)
+            .foregroundStyle(value.isSeconds ? secondsColor : color)
             .contentTransition(.numericText(countsDown: true))
             .lineLimit(1)
             .fixedSize()
-            .animation(.smooth(duration: 0.3), value: string)
+            .frame(width: CompactMetrics.counterWidth(value.text))
+            .animation(.smooth(duration: 0.3), value: value)
     }
 }
 
@@ -637,29 +721,25 @@ struct OpenPanel: View {
         }
     }
 
+    /// Barva ambientního světla: průměrná barva obalu hrající skladby, jinak barva zvýraznění.
+    private var ambientTint: Color {
+        if media.isPlaying, let art = media.artwork, let tint = ArtworkTint.color(for: art) {
+            return tint
+        }
+        return settings.accent.color
+    }
+
     /// Tlumené barevné světlo za skleněnými kartami (sklo na čisté černé není vidět),
     /// ale dost tmavé, aby karty měly kontrast.
     private var ambient: some View {
-        let hasArt = media.artwork != nil && media.isPlaying
+        let tint = ambientTint
         return GeometryReader { geo in
             ZStack {
                 Color.black
-                if hasArt, let art = media.artwork {
-                    Image(nsImage: art)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .blur(radius: 40)
-                        .saturation(0.7)
-                        .opacity(0.32)
-                        .clipped()
-                    Color.black.opacity(0.35)
-                } else {
-                    RadialGradient(colors: [settings.accent.color.opacity(0.2), Color.clear],
-                                   center: .bottomLeading, startRadius: 0, endRadius: 300)
-                    RadialGradient(colors: [Color.purple.opacity(0.12), Color.clear],
-                                   center: .bottomTrailing, startRadius: 0, endRadius: 260)
-                }
+                RadialGradient(colors: [tint.opacity(0.24), Color.clear],
+                               center: .bottomLeading, startRadius: 0, endRadius: 320)
+                RadialGradient(colors: [tint.opacity(0.14), Color.clear],
+                               center: .bottomTrailing, startRadius: 0, endRadius: 280)
                 // Hlavička zůstává na čisté černé (splývá s notchem), světlo sílí směrem dolů.
                 LinearGradient(colors: [Color.black, Color.black.opacity(0)],
                                startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.4))
@@ -667,7 +747,7 @@ struct OpenPanel: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
-        .animation(.smooth(duration: 0.6), value: hasArt)
+        .animation(.smooth(duration: 0.6), value: tint)
     }
 
     private var tabBar: some View {

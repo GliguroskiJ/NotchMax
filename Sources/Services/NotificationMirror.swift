@@ -42,7 +42,8 @@ enum NotificationMirrorStatus: Equatable, Sendable, CustomStringConvertible {
         case .disabled:
             return "Vypnuto."
         case .needsFullDiskAccess:
-            return "Chybí plný přístup k disku – bez něj NotchMax oznámení nepřečte."
+            return "Chybí plný přístup k disku – bez něj NotchMax oznámení nepřečte. "
+                + NotificationMirror.reAddHint
         case .running:
             return "Běží – nová oznámení se zobrazí v notchi. Aplikace se stylem upozornění „Žádné“ musí mít zapnuté „Zobrazit v Centru oznámení“."
         case .unsupported(let reason):
@@ -66,9 +67,21 @@ final class NotificationMirror: ObservableObject {
 
     static let shared = NotificationMirror()
 
+    /// Nápověda pro případ, kdy je přepínač v Nastavení zapnutý, ale macOS přístup nepřiznal.
+    /// NotchMax je podepsaný jen ad-hoc → po každé aktualizaci má binárka jiný otisk a záznam
+    /// v TCC (vázaný na původní podpis) jí už nepatří, i když přepínač dál svítí.
+    nonisolated static let reAddHint =
+        "Pokud je NotchMax v seznamu zapnutý, odeber ho (−) a přidej znovu – po aktualizaci ho macOS bez stálého podpisu nepozná."
+
+    nonisolated static let testTitle = "NotchMax test"
+    nonisolated static let testBody = "Takhle bude vypadat oznámení v notchi."
+
     @Published private(set) var status: Status = .disabled
 
-    /// Plný přístup k disku (test čtením chráněného souboru). Levné – volá se i z UI.
+    /// Popis výsledku posledního testu oznámení (pro UI).
+    @Published private(set) var lastTestResult: String?
+
+    /// Plný přístup k disku (zkouška čtení několika chráněných míst). Levné – volá se i z UI.
     var hasFullDiskAccess: Bool { NotificationDBLocator.hasFullDiskAccess() }
 
     private let reader = NotificationDBReader()
@@ -88,6 +101,11 @@ final class NotificationMirror: ObservableObject {
     private var appNameCache: [String: String] = [:]
     private let ownBundleID = (Bundle.main.bundleIdentifier ?? "com.jovan.NotchMax").lowercased()
 
+    // Test oznámení
+    private var testToken = 0
+    private var awaitingTestNotification = false
+    private let testTimeout: UInt64 = 10_000_000_000
+
     private init() {}
 
     func start() {
@@ -99,17 +117,89 @@ final class NotificationMirror: ObservableObject {
                 self?.setEnabled(isOn)
             }
             .store(in: &cancellables)
+
+        // Po návratu z Nastavení systému (přepnutí aplikace) překreslit UI, aby se
+        // znovu vyhodnotil `hasFullDiskAccess`.
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     func openFullDiskAccessSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-            NSWorkspace.shared.open(url)
-        }
+        SystemSettingsLink.open(.fullDiskAccess)
     }
 
     func openNotificationSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-            NSWorkspace.shared.open(url)
+        SystemSettingsLink.open(.notifications)
+    }
+
+    // MARK: Test
+
+    /// Náhled oznámení přímo v notchi (bez systému).
+    func previewNotificationHUD() {
+        HUDCenter.shared.show(.notification(appName: "NotchMax",
+                                            bundleID: nil,
+                                            title: "Testovací oznámení",
+                                            body: Self.testBody))
+    }
+
+    /// Pošle SKUTEČNÉ systémové oznámení přes `osascript` (odesílatel „Editor skriptů“),
+    /// takže projde celou cestou: Centrum oznámení → databáze → čtečka → HUD.
+    /// Když zrcadlo neběží, ukáže aspoň přímý náhled.
+    func sendTestNotification() {
+        testToken += 1
+        let token = testToken
+
+        guard enabled, status == .running else {
+            awaitingTestNotification = false
+            previewNotificationHUD()
+            let reason: String
+            switch status {
+            case .disabled:
+                reason = "zrcadlení oznámení je vypnuté"
+            case .needsFullDiskAccess:
+                reason = "chybí plný přístup k disku"
+            case .unsupported(let message):
+                reason = message.hasSuffix(".") ? String(message.dropLast()) : message
+            case .running:
+                reason = "čtečka oznámení ještě neběží"
+            }
+            lastTestResult = "Zobrazen jen náhled v notchi (\(reason)). Skutečná oznámení se do notche zatím nedostanou."
+            return
+        }
+
+        awaitingTestNotification = true
+        lastTestResult = "Odesílám testovací oznámení…"
+        let title = Self.testTitle
+        let body = Self.testBody
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = TestNotificationSender.send(title: title, body: body)
+            await self?.handleTestSent(result, token: token)
+        }
+    }
+
+    private func handleTestSent(_ result: TestNotificationSender.Result, token: Int) {
+        guard token == testToken else { return }
+        switch result {
+        case .failure(let message):
+            awaitingTestNotification = false
+            previewNotificationHUD()
+            lastTestResult = "Systémové oznámení se nepodařilo odeslat (\(message)). Zobrazen jen náhled v notchi."
+        case .success:
+            guard awaitingTestNotification else { return } // už dorazilo
+            lastTestResult = "Testovací oznámení odesláno (odesílatel „Editor skriptů“). Čekám, až ho NotchMax přečte…"
+            let timeout = testTimeout
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: timeout)
+                guard let self, token == self.testToken, self.awaitingTestNotification else { return }
+                self.awaitingTestNotification = false
+                self.lastTestResult = "Oznámení se do 10 s neobjevilo v databázi Centra oznámení. "
+                    + "Zkontroluj Nastavení systému → Oznámení → Editor skriptů (povolit oznámení a „Zobrazit v Centru oznámení“)."
+            }
         }
     }
 
@@ -150,6 +240,10 @@ final class NotificationMirror: ObservableObject {
     private func receive(_ items: [MirroredNotification], generation gen: Int) {
         guard gen == generation, enabled, AppSettings.shared.hudNotifications else { return }
         for item in items where item.bundleID.lowercased() != ownBundleID {
+            if awaitingTestNotification, item.title == Self.testTitle {
+                awaitingTestNotification = false
+                lastTestResult = "Funguje – testovací oznámení prošlo celou cestou až do notche."
+            }
             pending.append(item)
         }
         if pending.count > maxPending {
@@ -253,19 +347,95 @@ enum NotificationDBLocator {
         return path.isEmpty ? nil : path
     }
 
-    /// Zkusí soubor skutečně otevřít pro čtení (TCC blokuje až otevření, ne `stat`).
-    static func canOpenForReading(_ path: String) -> Bool {
-        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
-        try? handle.close()
-        return true
+    /// Výsledek zkoušky plného přístupu k disku.
+    enum AccessProbe: Sendable, Equatable {
+        /// Aspoň jedno chráněné místo šlo přečíst.
+        case granted
+        /// Chráněná místa existují, ale macOS čtení odmítl (EPERM/EACCES).
+        case denied
+        /// Nic z testovaných míst neexistuje – nelze rozhodnout.
+        case unknown
     }
 
-    /// Plný přístup k disku: TCC.db je čitelná jen s ním.
+    /// Plný přístup k disku – zkouší skutečné čtení několika míst chráněných TCC.
+    /// (Samotná ~/Library/…/TCC.db nestačí: na novějších macOS může být nečitelná
+    /// i s plným přístupem, nebo naopak chybět.)
+    static func probeFullDiskAccess() -> AccessProbe {
+        let home = NSHomeDirectory()
+        let files = [
+            home + "/Library/Safari/Bookmarks.plist",
+            home + "/Library/Safari/History.db",
+            home + "/Library/Application Support/com.apple.TCC/TCC.db",
+            "/Library/Application Support/com.apple.TCC/TCC.db",
+        ]
+        let directories = [
+            home + "/Library/Safari",
+            home + "/Library/Mail",
+            home + "/Library/Messages",
+        ]
+
+        var sawDenied = false
+        for path in files {
+            switch probeFile(path) {
+            case .granted: return .granted
+            case .denied: sawDenied = true
+            case .unknown: break
+            }
+        }
+        for path in directories {
+            switch probeDirectory(path) {
+            case .granted: return .granted
+            case .denied: sawDenied = true
+            case .unknown: break
+            }
+        }
+        if sawDenied { return .denied }
+
+        // Poslední možnost: samotná databáze oznámení. Jen když nic jiného nerozhodlo –
+        // bez oprávnění by macOS 15+ mohl ukázat dialog „přístup k datům jiných aplikací“.
+        for path in candidatePaths() where isGroupContainerPath(path) {
+            let result = probeFile(path)
+            if result != .unknown { return result }
+        }
+        return .unknown
+    }
+
+    /// Plný přístup k disku potvrzený skutečným čtením.
     static func hasFullDiskAccess() -> Bool {
-        // Záměrně nesaháme na Group Containers – bez oprávnění by macOS 15+ mohl
-        // opakovaně ukazovat dialog „NotchMax chce přistupovat k datům jiných aplikací“.
-        let tccPath = NSHomeDirectory() + "/Library/Application Support/com.apple.TCC/TCC.db"
-        return canOpenForReading(tccPath)
+        probeFullDiskAccess() == .granted
+    }
+
+    /// Otevře soubor a přečte 1 bajt (TCC blokuje až otevření/čtení, ne `stat`).
+    static func probeFile(_ path: String) -> AccessProbe {
+        let fd = Darwin.open(path, O_RDONLY | O_NONBLOCK)
+        if fd < 0 {
+            return classify(errno)
+        }
+        var byte: UInt8 = 0
+        let count = Darwin.read(fd, &byte, 1)
+        let readError = errno
+        Darwin.close(fd)
+        if count >= 0 { return .granted }
+        return classify(readError)
+    }
+
+    /// Otevře adresář a přečte první položku.
+    static func probeDirectory(_ path: String) -> AccessProbe {
+        guard let dir = opendir(path) else {
+            return classify(errno)
+        }
+        defer { closedir(dir) }
+        errno = 0
+        if readdir(dir) != nil { return .granted }
+        let error = errno
+        return error == 0 ? .granted : classify(error)
+    }
+
+    private static func classify(_ error: Int32) -> AccessProbe {
+        switch error {
+        case EPERM, EACCES: return .denied
+        default: return .unknown // ENOENT, ENOTDIR, …
+        }
     }
 
     static func isGroupContainerPath(_ path: String) -> Bool {
@@ -360,9 +530,11 @@ private final class NotificationDBReader: @unchecked Sendable {
 
     private func openDatabase() -> NotificationMirrorStatus {
         let fm = FileManager.default
-        let fullDiskAccess = NotificationDBLocator.hasFullDiskAccess()
+        // Zkouší se při každém pokusu (každých pár sekund, dokud čtečka neběží),
+        // takže jakmile uživatel přístup udělí, čtečka se sama rozběhne.
+        let access = NotificationDBLocator.probeFullDiskAccess()
         var candidates = NotificationDBLocator.candidatePaths()
-        if !fullDiskAccess {
+        if access == .denied {
             // macOS 15+: aktuální databáze je jen v Group Containers (stará kopie v
             // /var/folders by byla neaktuální) → bez plného přístupu to nepůjde.
             if #available(macOS 15.0, *) { return .needsFullDiskAccess }
@@ -370,11 +542,12 @@ private final class NotificationDBReader: @unchecked Sendable {
             // starší umístění v /var/folders na macOS 14 může jít číst i bez něj.
             candidates = candidates.filter { !NotificationDBLocator.isGroupContainerPath($0) }
         }
+        // `.unknown` (žádné testované místo neexistuje) → zkusíme databázi přímo.
         let existing = candidates.filter { fm.fileExists(atPath: $0) }
 
         guard !existing.isEmpty else {
             // Bez přístupu může TCC skrýt i samotnou existenci souboru.
-            if !fullDiskAccess { return .needsFullDiskAccess }
+            if access != .granted { return .needsFullDiskAccess }
             return .unsupported("databáze Centra oznámení nebyla na tomto systému nalezena.")
         }
 
@@ -411,9 +584,11 @@ private final class NotificationDBReader: @unchecked Sendable {
             }
         }
 
-        if permissionProblem || !fullDiskAccess {
+        if access != .granted && (permissionProblem || access == .denied) {
             return .needsFullDiskAccess
         }
+        // Plný přístup potvrzený (nebo nezjistitelný), ale databáze nejde přečíst –
+        // ukážeme skutečnou chybu místo zavádějícího „bez přístupu k disku“.
         return .unsupported("databázi oznámení nelze přečíst (\(lastError)).")
     }
 
@@ -535,7 +710,8 @@ private final class NotificationDBReader: @unchecked Sendable {
         // Zaneprázdněná databáze – zkusíme to příště.
         if primary == SQLITE_BUSY || primary == SQLITE_LOCKED { return }
         closeDB()
-        if isPermissionError(code) || !NotificationDBLocator.hasFullDiskAccess() {
+        let access = NotificationDBLocator.probeFullDiskAccess()
+        if access == .denied || (isPermissionError(code) && access != .granted) {
             report(.needsFullDiskAccess)
         } else {
             report(.unsupported("chyba čtení databáze oznámení (\(message))."))
@@ -562,5 +738,49 @@ private final class NotificationDBReader: @unchecked Sendable {
         guard let value = dict[key] as? String else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+// MARK: - Odeslání testovacího oznámení (mimo hlavní vlákno)
+
+/// Pošle skutečné systémové oznámení přes `osascript`. Oznámení pak v Centru oznámení
+/// patří aplikaci „Editor skriptů“ (com.apple.ScriptEditor2), ne NotchMaxu – zrcadlo
+/// ho tedy nevyfiltruje jako vlastní a projde celou cestou přes databázi.
+private enum TestNotificationSender {
+    enum Result: Sendable {
+        case success
+        case failure(String)
+    }
+
+    /// Blokující – volat jen mimo hlavní vlákno.
+    static func send(title: String, body: String) -> Result {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        let script = "display notification \(quoted(body)) with title \(quoted(title))"
+        process.arguments = ["-e", script]
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        process.standardOutput = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        if process.terminationStatus == 0 {
+            return .success
+        }
+        let message = String(data: errorData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return .failure(message.isEmpty ? "osascript skončil s kódem \(process.terminationStatus)" : message)
+    }
+
+    /// Řetězcový literál AppleScriptu.
+    private static func quoted(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"" + escaped + "\""
     }
 }

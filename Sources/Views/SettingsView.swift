@@ -4,19 +4,39 @@ import ServiceManagement
 
 // MARK: - Sekce
 
-private enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, appearance, activities, hud, modules, calendar, agents, updates
+/// Sekce okna nastavení. Raw value slouží k navigaci zvenku
+/// (`openNotchMaxSettings(section: "calendar")`) – hodnoty neměnit.
+enum SettingsSection: String, CaseIterable, Identifiable {
+    case general, appearance, notch, panel, focus, calendar, notifications, permissions, agents, updates
 
     var id: String { rawValue }
+
+    /// Navigace podle textového klíče; přijímá i klíče dřívějších sekcí.
+    init?(navigationKey: String) {
+        if let section = SettingsSection(rawValue: navigationKey) {
+            self = section
+            return
+        }
+        switch navigationKey {
+        case "activities", "hud": self = .notch
+        case "modules", "tabs": self = .panel
+        case "timer": self = .focus
+        case "privacy": self = .permissions
+        case "claude": self = .agents
+        default: return nil
+        }
+    }
 
     var title: String {
         switch self {
         case .general: return "Obecné"
         case .appearance: return "Vzhled"
-        case .activities: return "Aktivity"
-        case .hud: return "HUD a oznámení"
-        case .modules: return "Moduly"
+        case .notch: return "Notch"
+        case .panel: return "Panel"
+        case .focus: return "Časovač a soustředění"
         case .calendar: return "Kalendář"
+        case .notifications: return "Oznámení"
+        case .permissions: return "Oprávnění"
         case .agents: return "Agenti"
         case .updates: return "Aktualizace"
         }
@@ -26,14 +46,22 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape"
         case .appearance: return "paintpalette"
-        case .activities: return "rectangle.split.2x1"
-        case .hud: return "bell.badge.fill"
-        case .modules: return "square.grid.2x2"
+        case .notch: return "rectangle.topthird.inset.filled"
+        case .panel: return "square.grid.2x2"
+        case .focus: return "timer"
         case .calendar: return "calendar"
+        case .notifications: return "bell.badge"
+        case .permissions: return "lock.shield"
         case .agents: return "sparkles"
         case .updates: return "arrow.triangle.2.circlepath"
         }
     }
+}
+
+/// Přepne otevřené okno nastavení na danou sekci.
+@MainActor
+func showSettingsSection(_ section: SettingsSection) {
+    SettingsNavigator.shared.requestedSection = section.rawValue
 }
 
 // MARK: - Skutečné frosted glass pro sidebar
@@ -72,9 +100,13 @@ struct SettingsView: View {
     @State private var selection: SettingsSection = .general
     @ObservedObject private var navigator = SettingsNavigator.shared
 
+    private let permissionTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
+    init() {}
+
     private func applyRequestedSection() {
         guard let raw = navigator.requestedSection else { return }
-        if let section = SettingsSection(rawValue: raw) { selection = section }
+        if let section = SettingsSection(navigationKey: raw) { selection = section }
         navigator.requestedSection = nil
     }
 
@@ -87,6 +119,8 @@ struct SettingsView: View {
                 Text(selection.title)
                     .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .padding(.horizontal, 32)
                     .padding(.top, 34)
                     .padding(.bottom, 16)
@@ -107,9 +141,16 @@ struct SettingsView: View {
         }
         .frame(width: 900, height: 620)
         .background(VisualEffectBackground())
-        .onAppear { applyRequestedSection() }
+        .onAppear {
+            applyRequestedSection()
+            PermissionCenter.shared.refresh()
+        }
         .onReceive(navigator.$requestedSection) { value in
             if value != nil { DispatchQueue.main.async { applyRequestedSection() } }
+        }
+        .onReceive(permissionTimer) { _ in
+            // Stav oprávnění kontrolovat jen při otevřeném okně.
+            if SettingsWindowController.shared.isVisible { PermissionCenter.shared.refresh() }
         }
         .ignoresSafeArea()
         .animation(.smooth, value: selection)
@@ -121,10 +162,12 @@ struct SettingsView: View {
         switch selection {
         case .general: GeneralSettings()
         case .appearance: AppearanceSettings()
-        case .activities: ActivitiesSettings()
-        case .hud: HUDSettingsSection()
-        case .modules: ModulesSettings()
+        case .notch: NotchSettings()
+        case .panel: PanelSettings()
+        case .focus: FocusSettingsSection()
         case .calendar: CalendarSettings()
+        case .notifications: NotificationSettingsSection()
+        case .permissions: PermissionsSettingsSection()
         case .agents: ClaudeSettingsSection()
         case .updates: UpdateSettings()
         }
@@ -159,22 +202,29 @@ private struct SettingsSidebar: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
 
+    private func sidebarItem(_ section: SettingsSection) -> some View {
+        SidebarItem(section: section, isSelected: selection == section) { selection = section }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             // místo pro semafor
             Color.clear.frame(height: 52)
 
-            SidebarGroupTitle(title: "Obecné")
-            SidebarItem(section: .general, isSelected: selection == .general) { selection = .general }
-            SidebarItem(section: .appearance, isSelected: selection == .appearance) { selection = .appearance }
-            SidebarItem(section: .activities, isSelected: selection == .activities) { selection = .activities }
-            SidebarItem(section: .hud, isSelected: selection == .hud) { selection = .hud }
-            SidebarItem(section: .modules, isSelected: selection == .modules) { selection = .modules }
-            SidebarItem(section: .calendar, isSelected: selection == .calendar) { selection = .calendar }
-            SidebarItem(section: .agents, isSelected: selection == .agents) { selection = .agents }
+            sidebarItem(.general)
+            sidebarItem(.appearance)
+
+            SidebarGroupTitle(title: "Funkce")
+            sidebarItem(.notch)
+            sidebarItem(.panel)
+            sidebarItem(.focus)
+            sidebarItem(.calendar)
+            sidebarItem(.notifications)
+            sidebarItem(.agents)
 
             SidebarGroupTitle(title: "Aplikace")
-            SidebarItem(section: .updates, isSelected: selection == .updates) { selection = .updates }
+            sidebarItem(.permissions)
+            sidebarItem(.updates)
 
             Spacer(minLength: 0)
 
@@ -209,6 +259,7 @@ private struct SidebarItem: View {
     let isSelected: Bool
     let action: () -> Void
     @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var permissions = PermissionCenter.shared
     @State private var hovering = false
 
     init(section: SettingsSection, isSelected: Bool, action: @escaping () -> Void) {
@@ -227,7 +278,17 @@ private struct SidebarItem: View {
                 Text(section.title)
                     .font(.system(size: 14.5, weight: .medium))
                     .foregroundStyle(Color.white)
+                    .lineLimit(1)
                 Spacer(minLength: 0)
+                if section == .permissions && permissions.missingCount > 0 {
+                    Text("\(permissions.missingCount)")
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Capsule().fill(Color.orange))
+                        .help("Chybějící oprávnění")
+                }
             }
             .padding(.horizontal, 10)
             .frame(height: 32)
@@ -389,6 +450,55 @@ struct SettingsNote: View {
     }
 }
 
+/// Řádek s popisem nahoře a tlačítky na vlastním řádku pod ním – tlačítka se nikdy neořežou.
+struct SettingsActionRow<Actions: View>: View {
+    let title: String
+    var subtitle: String?
+    let actions: () -> Actions
+
+    init(title: String, subtitle: String? = nil, @ViewBuilder actions: @escaping () -> Actions) {
+        self.title = title
+        self.subtitle = subtitle
+        self.actions = actions
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14.5))
+                    .foregroundStyle(Color.white)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            SettingsButtonRow { actions() }
+        }
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Řada tlačítek, která se při nedostatku místa složí pod sebe.
+/// Tlačítka uvnitř by měla mít `.fixedSize()`, aby se jejich text nezkracoval.
+struct SettingsButtonRow<Content: View>: View {
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { content() }
+            VStack(alignment: .leading, spacing: 8) { content() }
+        }
+    }
+}
+
 // MARK: - Obecné
 
 private struct GeneralSettings: View {
@@ -417,7 +527,7 @@ private struct GeneralSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard {
+            SettingsCard(header: "Spuštění") {
                 SettingsToggleRow(title: "Spouštět při přihlášení",
                                   subtitle: "NotchMax se spustí automaticky po přihlášení k Macu.",
                                   isOn: launchBinding)
@@ -425,19 +535,10 @@ private struct GeneralSettings: View {
                 SettingsToggleRow(title: "Globální zkratka ⌥⌘N",
                                   subtitle: "Otevře a zavře notch z klávesnice.",
                                   isOn: $settings.hotkeyEnabled)
-                SettingsDivider()
-                SettingsRow(title: "Zobrazit na") {
-                    Picker("", selection: $settings.display) {
-                        ForEach(DisplayChoice.allCases) { Text($0.title).tag($0) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                }
             }
 
             SettingsCard(header: "Chování") {
-                SettingsRow(title: "Zpoždění rozbalení",
+                SettingsRow(title: "Prodleva při najetí",
                             subtitle: "Jak dlouho musí myš zůstat na notchi, než se rozbalí.") {
                     HStack(spacing: 10) {
                         Slider(value: $settings.hoverDelay, in: 0...0.6)
@@ -450,12 +551,10 @@ private struct GeneralSettings: View {
                     }
                 }
                 SettingsDivider()
-                SettingsRow(title: "Mazat odkladiště po") {
-                    Picker("", selection: $settings.shelfTTLHours) {
-                        Text("1 hodině").tag(1)
-                        Text("24 hodinách").tag(24)
-                        Text("7 dnech").tag(168)
-                        Text("Nikdy").tag(0)
+                SettingsRow(title: "Zobrazit na",
+                            subtitle: "Na kterém displeji se notch zobrazí.") {
+                    Picker("", selection: $settings.display) {
+                        ForEach(DisplayChoice.allCases) { Text($0.title).tag($0) }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -467,6 +566,7 @@ private struct GeneralSettings: View {
                 GlassPill(title: "Ukončit NotchMax", symbol: "power") {
                     NSApp.terminate(nil)
                 }
+                .fixedSize()
                 Spacer()
                 Text(versionText)
                     .font(.system(size: 12.5))
@@ -479,38 +579,205 @@ private struct GeneralSettings: View {
 
 // MARK: - Vzhled
 
-private struct AccentTile: View {
+/// Posuvník odstínu přes celé barevné spektrum (duhová dráha).
+private struct HueSlider: View {
+    @Binding var hue: Double
+    let isDimmed: Bool
+    let onEdit: () -> Void
+
+    private let trackHeight: CGFloat = 14
+    private let thumbSize: CGFloat = 22
+
+    init(hue: Binding<Double>, isDimmed: Bool, onEdit: @escaping () -> Void) {
+        self._hue = hue
+        self.isDimmed = isDimmed
+        self.onEdit = onEdit
+    }
+
+    private static let spectrum: [Color] = (0...12).map { NotchAccent.color(forHue: Double($0) / 12) }
+
+    private func setHue(_ value: Double) {
+        hue = min(max(value, 0), 1)
+        onEdit()
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let usable = max(geo.size.width - thumbSize, 1)
+            let thumbX = CGFloat(hue) * usable + thumbSize / 2
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(LinearGradient(colors: HueSlider.spectrum, startPoint: .leading, endPoint: .trailing))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.75))
+                    .frame(width: geo.size.width, height: trackHeight)
+                    .opacity(isDimmed ? 0.45 : 1)
+                Circle()
+                    .fill(NotchAccent.color(forHue: hue))
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 2.5))
+                    .shadow(color: Color.black.opacity(0.45), radius: 3, x: 0, y: 1)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .position(x: thumbX, y: geo.size.height / 2)
+                    .opacity(isDimmed ? 0.6 : 1)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .overlay(
+                // Myš chytá NSView: okno je posuvné za pozadí, SwiftUI DragGesture by mohl posouvat okno.
+                HueDragCatcher { x in
+                    setHue(Double((x - thumbSize / 2) / usable))
+                }
+            )
+        }
+        .frame(height: thumbSize + 6)
+        .accessibilityElement()
+        .accessibilityLabel("Odstín akcentní barvy")
+        .accessibilityValue("\(Int((hue * 360).rounded())) stupňů")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: setHue(hue + 1.0 / 72)
+            case .decrement: setHue(hue - 1.0 / 72)
+            @unknown default: break
+            }
+        }
+    }
+}
+
+/// Průhledné NSView nad posuvníkem odstínu: zachytí klik a tažení (a nedovolí tím posunout okno).
+private struct HueDragCatcher: NSViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    init(onChange: @escaping (CGFloat) -> Void) {
+        self.onChange = onChange
+    }
+
+    func makeNSView(context: Context) -> HueDragView {
+        let view = HueDragView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ nsView: HueDragView, context: Context) {
+        nsView.onChange = onChange
+    }
+}
+
+private final class HueDragView: NSView {
+    var onChange: ((CGFloat) -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        report(event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        report(event)
+    }
+
+    private func report(_ event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        onChange?(point.x)
+    }
+}
+
+/// Malé kolečko rychlé předvolby barvy.
+private struct AccentPresetDot: View {
     let choice: AccentChoice
     let isSelected: Bool
     let action: () -> Void
 
+    init(choice: AccentChoice, isSelected: Bool, action: @escaping () -> Void) {
+        self.choice = choice
+        self.isSelected = isSelected
+        self.action = action
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                Circle()
-                    .fill(choice.color)
-                    .frame(width: 22, height: 22)
-                    .shadow(color: choice.color.opacity(isSelected ? 0.6 : 0), radius: 6)
-                Text(choice.title)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.65))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 64)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(isSelected ? 0.1 : 0.04))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(isSelected ? choice.color : Color.white.opacity(0.08),
-                                  lineWidth: isSelected ? 1.5 : 0.75)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Circle()
+                .fill(choice.color)
+                .frame(width: 18, height: 18)
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(isSelected ? 0.95 : 0.15), lineWidth: isSelected ? 2 : 0.75)
+                        .padding(-3)
+                )
+                .padding(4)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .help(choice.title)
+    }
+}
+
+private struct AccentColorCard: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    private var hueBinding: Binding<Double> {
+        Binding<Double>(
+            get: { settings.accentHue },
+            set: { settings.accentHue = $0 }
+        )
+    }
+
+    private var hueDescription: String {
+        if settings.accentWhite { return "Bílá" }
+        return "Odstín \(Int((settings.accentHue * 360).rounded()))°"
+    }
+
+    private func isPresetSelected(_ choice: AccentChoice) -> Bool {
+        if choice == .white { return settings.accentWhite }
+        return !settings.accentWhite && abs(settings.accentHue - choice.hue) < 0.005
+    }
+
+    var body: some View {
+        SettingsCard(header: "Barva zvýraznění") {
+            HStack(alignment: .center, spacing: 16) {
+                // Náhled
+                ZStack {
+                    Circle()
+                        .fill(settings.accent.color)
+                        .shadow(color: settings.accent.color.opacity(0.55), radius: 8)
+                    Image(systemName: "capsule.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.black.opacity(0.55))
+                }
+                .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(hueDescription)
+                            .font(.system(size: 13.5, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Color.white.opacity(0.8))
+                        Spacer(minLength: 8)
+                        HStack(spacing: 2) {
+                            ForEach(AccentChoice.allCases) { choice in
+                                AccentPresetDot(choice: choice, isSelected: isPresetSelected(choice)) {
+                                    withAnimation(.smooth(duration: 0.25)) {
+                                        if choice == .white {
+                                            settings.accentWhite = true
+                                        } else {
+                                            settings.accentHue = choice.hue
+                                            settings.accentWhite = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .fixedSize()
+                    }
+                    HueSlider(hue: hueBinding, isDimmed: settings.accentWhite) {
+                        if settings.accentWhite { settings.accentWhite = false }
+                    }
+                }
+            }
+            .padding(.vertical, 14)
+            SettingsDivider()
+            SettingsToggleRow(title: "Bílá",
+                              subtitle: "Neutrální bílé zvýraznění místo barevného odstínu.",
+                              isOn: $settings.accentWhite)
+        }
     }
 }
 
@@ -519,16 +786,7 @@ private struct AppearanceSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Akcentní barva") {
-                HStack(spacing: 8) {
-                    ForEach(AccentChoice.allCases) { choice in
-                        AccentTile(choice: choice, isSelected: settings.accent == choice) {
-                            withAnimation(.smooth(duration: 0.25)) { settings.accent = choice }
-                        }
-                    }
-                }
-                .padding(.vertical, 12)
-            }
+            AccentColorCard()
 
             SettingsCard(header: "Poloha a velikost notche") {
                 SettingsRow(title: "Posun nahoru / dolů",
@@ -557,11 +815,13 @@ private struct AppearanceSettings: View {
                     }
                 }
                 SettingsDivider()
-                SettingsRow(title: "Výchozí hodnoty") {
-                    GlassPill(title: "Obnovit") {
-                        settings.notchOffsetY = 2
-                        settings.notchOverhang = 2
+                SettingsRow(title: "Výchozí hodnoty",
+                            subtitle: String(format: "Posun %+.0f px, přesah %.0f px.",
+                                             AppSettings.defaultNotchOffsetY, AppSettings.defaultNotchOverhang)) {
+                    GlassPill(title: "Obnovit", symbol: "arrow.counterclockwise") {
+                        settings.resetNotchGeometry()
                     }
+                    .fixedSize()
                 }
             }
 
@@ -578,14 +838,16 @@ private struct AppearanceSettings: View {
                 SettingsDivider()
                 SettingsRow(title: "Vyzkoušet animaci") {
                     HStack(spacing: 8) {
-                        GlassPill(title: "Obnovit") {
-                            settings.chargeInsetLeft = 0
-                            settings.chargeInsetRight = 0
+                        GlassPill(title: "Obnovit", symbol: "arrow.counterclockwise") {
+                            settings.resetChargeInsets()
                         }
+                        .fixedSize()
                         GlassPill(title: "Přehrát", symbol: "play.fill") {
                             AppServices.shared.viewModel?.runChargeAnimation()
                         }
+                        .fixedSize()
                     }
+                    .fixedSize()
                 }
             }
 
@@ -621,25 +883,23 @@ private struct ChargeInsetRow: View {
                     .foregroundStyle(Color.white.opacity(0.7))
                     .frame(width: 60, alignment: .trailing)
                 Button {
-                    value = 0
+                    value = AppSettings.defaultChargeInset
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(value == 0 ? 0.25 : 0.7))
+                        .foregroundStyle(Color.white.opacity(value == AppSettings.defaultChargeInset ? 0.25 : 0.7))
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(value == 0)
-                .help("Vrátit na 0")
+                .disabled(value == AppSettings.defaultChargeInset)
+                .help("Vrátit na výchozí hodnotu")
             }
         }
     }
 }
 
-// MARK: - Aktivity
-
-/// Dlaždice pro výběr možnosti se symbolem — stejný styl jako výběr akcentní barvy.
+/// Dlaždice pro výběr možnosti se symbolem.
 struct SettingsChipTile: View {
     let title: String
     let symbol: String
@@ -685,7 +945,9 @@ struct SettingsChipTile: View {
     }
 }
 
-private struct ActivitiesSettings: View {
+// MARK: - Notch
+
+private struct NotchSettings: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
@@ -703,15 +965,17 @@ private struct ActivitiesSettings: View {
                                   isOn: $settings.liveClaude)
                 SettingsDivider()
                 SettingsNote(symbol: "rectangle.split.2x1",
-                             text: "Když běží dvě aktivity naráz, notch automaticky ukáže ty dvě poslední – jednu vlevo a jednu vpravo.")
+                             text: "Dvě aktivity naráz se řeší automaticky: když běží víc aktivit (třeba hudba a časovač), notch ukáže dvě naposledy spuštěné – jednu vlevo a jednu vpravo od notche. Nic dalšího nastavovat nemusíš.")
             }
+
+            HUDSettingsSection()
         }
     }
 }
 
-// MARK: - Moduly
+// MARK: - Panel
 
-private struct ModulesSettings: View {
+private struct PanelSettings: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
@@ -731,12 +995,36 @@ private struct ModulesSettings: View {
                              text: "V notchi se vejde nejvýš 5 záložek včetně Domů – víc by se schovalo za fyzický notch.")
             }
 
-            FocusSettingsSection()
+            SettingsCard(header: "Zrcátko") {
+                SettingsToggleRow(title: "Tlačítko kamery v notchi",
+                                  subtitle: "Rychlý náhled z kamery – zkontroluj se před hovorem.",
+                                  isOn: $settings.mirrorButton)
+                if settings.mirrorButton {
+                    SettingsDivider()
+                    PermissionRow(kind: .camera, compact: true)
+                }
+            }
+
+            SettingsCard(header: "Odkladiště") {
+                SettingsRow(title: "Mazat odkladiště po",
+                            subtitle: "Soubory v odkladišti se po této době samy odeberou.") {
+                    Picker("", selection: $settings.shelfTTLHours) {
+                        Text("1 hodině").tag(1)
+                        Text("24 hodinách").tag(24)
+                        Text("7 dnech").tag(168)
+                        Text("Nikdy").tag(0)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+            }
         }
     }
 }
 
 // Kalendář: `CalendarSettings` je definováno v samostatném souboru.
+// Oznámení a Oprávnění: `NotificationSettingsSection` a `PermissionsSettingsSection` v HUDSettingsSection.swift.
 
 // MARK: - Aktualizace
 
@@ -784,6 +1072,7 @@ private struct UpdateSettings: View {
                     GlassPill(title: "Zkontrolovat", symbol: "arrow.clockwise") {
                         updates.checkNow()
                     }
+                    .fixedSize()
                 }
                 .padding(.vertical, 14)
                 SettingsDivider()
@@ -800,6 +1089,16 @@ private struct UpdateSettings: View {
                     subtitle: "Kontrola probíhá při startu, po probuzení Macu a jednou denně. Aktualizace se nainstaluje vždy až po tvém potvrzení.",
                     isOn: autoBinding
                 )
+            }
+
+            SettingsCard(header: "Po aktualizaci") {
+                SettingsActionRow(title: "Zkontroluj oprávnění",
+                                  subtitle: "Po aktualizaci nepodepsaného sestavení může macOS zapomenout udělená oprávnění.") {
+                    GlassPill(title: "Zobrazit oprávnění", symbol: "lock.shield") {
+                        showSettingsSection(.permissions)
+                    }
+                    .fixedSize()
+                }
             }
         }
     }

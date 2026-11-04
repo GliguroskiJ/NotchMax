@@ -4,12 +4,14 @@ import SwiftUI
 struct HomeView: View {
     var body: some View {
         HStack(spacing: NotchLayout.spacingM) {
+            // Přehrávač má pevnou (užší) šířku, zbytek dostane kalendář a baterie.
             MediaCard()
+                .frame(width: MediaCard.cardWidth)
             VStack(spacing: NotchLayout.spacingM) {
                 NextEventCard()
                 BatteryCard()
             }
-            .frame(width: NotchLayout.columnWidth)
+            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -20,7 +22,9 @@ struct MediaCard: View {
     @EnvironmentObject private var media: MediaMonitor
     @EnvironmentObject private var settings: AppSettings
 
-    private let artSize: CGFloat = 152
+    /// Šířka karty přehrávače na Přehledu (obsah panelu má ~614 pt).
+    static let cardWidth: CGFloat = 340
+    private let artSize: CGFloat = 136
 
     var body: some View {
         Group {
@@ -49,14 +53,17 @@ struct MediaCard: View {
                 .foregroundStyle(Color.white.opacity(0.45))
 
                 Text(media.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.white)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                     .padding(.top, 6)
+                    .help(media.title)
                 Text(media.artist)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(Color.white.opacity(0.6))
                     .lineLimit(1)
+                    .truncationMode(.tail)
                     .padding(.top, 2)
 
                 Spacer(minLength: 6)
@@ -88,50 +95,20 @@ struct MediaCard: View {
         .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
     }
 
-    /// Všechna tlačítka přehrávání v jedné skleněné kapsli, play zvýrazněné.
+    /// Tři samostatná kulatá skleněná tlačítka (bez společné kapsle), play/pauza větší a zvýrazněné.
     private var controls: some View {
-        GlassContainer(spacing: 6) {
-            HStack(spacing: 6) {
-                TransportButton(symbol: "backward.fill", size: 30) { media.previous() }
-                TransportButton(symbol: media.isPlaying ? "pause.fill" : "play.fill", size: 38, prominent: true) {
-                    media.togglePlayPause()
-                }
-                TransportButton(symbol: "forward.fill", size: 30) { media.next() }
+        HStack(spacing: 8) {
+            GlassTransportButton(symbol: "backward.fill", size: 30) { media.previous() }
+                .help("Předchozí")
+            GlassTransportButton(symbol: media.isPlaying ? "pause.fill" : "play.fill", size: 40,
+                                 prominent: true, tint: settings.accent.color.opacity(0.45)) {
+                media.togglePlayPause()
             }
-            .padding(4)
-            .notchGlass(in: Capsule(), tint: Color.white.opacity(0.05))
+            .help(media.isPlaying ? "Pozastavit" : "Přehrát")
+            GlassTransportButton(symbol: "forward.fill", size: 30) { media.next() }
+                .help("Další")
         }
-    }
-}
-
-private struct TransportButton: View {
-    let symbol: String
-    let size: CGFloat
-    var prominent = false
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: size * 0.4, weight: .bold))
-                .foregroundStyle(prominent ? Color.black : Color.white)
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: size, height: size)
-                .background(Circle().fill(backgroundColor))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(hovering ? 1.08 : 1)
-        .animation(.smooth(duration: 0.16), value: hovering)
-        .animation(.smooth(duration: 0.2), value: symbol)
-        .onHover { hovering = $0 }
-    }
-
-    private var backgroundColor: Color {
-        if prominent { return Color.white.opacity(hovering ? 1 : 0.92) }
-        return Color.white.opacity(hovering ? 0.16 : 0)
+        .padding(.leading, 1)
     }
 }
 
@@ -160,7 +137,7 @@ struct NextEventCard: View {
                 emptyRow(symbol: "checkmark.circle", title: "Žádné další schůzky", subtitle: dayLongSubtitle)
             }
         } else {
-            // Není připojený žádný zdroj – nastavení nabídne kalendáře macOS i přímé přihlášení ke Googlu.
+            // Není připojený žádný zdroj – nastavení nabídne připojení kalendářů macOS.
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 5) {
                     Image(systemName: "calendar")
@@ -177,7 +154,7 @@ struct NextEventCard: View {
     }
 
     private func meeting(_ e: CalEvent) -> some View {
-        let ongoing = e.start <= calendar.now
+        let ongoing = e.start <= Date()
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(ongoing ? "Právě probíhá" : "Další schůzka")
@@ -223,7 +200,8 @@ struct NextEventCard: View {
     }
 
     private var dayLongSubtitle: String? {
-        guard let e = calendar.firstDayLongEvent else { return nil }
+        let now = Date()
+        guard let e = calendar.events.first(where: { $0.isAllDay && $0.end > now }) else { return nil }
         return "Celý den: \(e.title)"
     }
 

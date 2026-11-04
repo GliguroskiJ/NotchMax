@@ -10,15 +10,22 @@ struct HUDLayout: Equatable {
     var side: CGFloat
     /// O kolik je HUD vyšší než zavřený notch (obsah pod notchem).
     var extraHeight: CGFloat
+    /// Vlastní spodní zaoblení (nil = výchozí podle výšky).
+    var customBottomRadius: CGFloat? = nil
 
-    var bottomRadius: CGFloat { extraHeight > 0 ? 22 : NotchLayout.closedBottomRadius }
+    var bottomRadius: CGFloat {
+        if let customBottomRadius { return customBottomRadius }
+        return extraHeight > 0 ? 22 : NotchLayout.closedBottomRadius
+    }
 
     static func forEvent(_ event: HUDEvent) -> HUDLayout {
         switch event {
         case .volume, .brightness, .keyboardBrightness:
-            return HUDLayout(side: 116, extraHeight: 0)
+            // Mírné rozšíření a nízký pruh pod notchem pro tenký ukazatel úrovně.
+            return HUDLayout(side: 50, extraHeight: 16, customBottomRadius: 16)
         case .media:
-            return HUDLayout(side: 124, extraHeight: 0)
+            // Jen malý obal alba vlevo a symbol vpravo.
+            return HUDLayout(side: 46, extraHeight: 0)
         case .headphones:
             return HUDLayout(side: 64, extraHeight: 62)
         case .focus:
@@ -115,9 +122,9 @@ struct HUDView: View {
         case .keyboardBrightness(let level):
             HUDLevelView(kind: .keyboard, level: level, revision: revision,
                          metrics: metrics, accent: accent)
-        case .media(let action, let title, let artist):
-            HUDMediaView(action: action, title: title, artist: artist, revision: revision,
-                         metrics: metrics, accent: accent)
+        case .media(let action, _, _):
+            // Bez textu – jen obal alba a symbol (titulek by přetékal).
+            HUDMediaView(action: action, revision: revision, metrics: metrics, accent: accent)
         case .headphones(let name, let model, let left, let right, let caseLevel, let connected):
             HUDHeadphonesView(name: name, model: model, left: left, right: right, caseLevel: caseLevel,
                               connected: connected, revision: revision, metrics: metrics)
@@ -197,40 +204,24 @@ struct HUDLevelView: View {
 
     private var shown: Double { muted ? 0 : clamped }
 
-    private var title: String {
-        switch kind {
-        case .volume: return "Hlasitost"
-        case .brightness: return "Jas"
-        case .keyboard: return "Podsvícení"
-        }
-    }
-
+    /// Jednoduchý HUD: malá ikona vlevo, drobné procento vpravo, tenký pruh pod notchem.
     var body: some View {
-        HUDScaffold(metrics: metrics) {
-            HStack(spacing: 7) {
-                icon
-                    .frame(width: 22, height: 22)
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .lineLimit(1)
-                    .fixedSize()
-            }
+        HUDScaffold(metrics: metrics, bottomInset: 16) {
+            icon
+                .frame(width: 16, height: 16)
         } right: {
-            HStack(spacing: 8) {
-                HUDLevelBar(level: shown, tint: muted ? Color.white.opacity(0.35) : accent)
-                    .frame(width: 56, height: 7)
-                Text("\(Int((shown * 100).rounded())) %")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(muted ? 0.55 : 0.92))
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .frame(width: 32, alignment: .trailing)
-                    .animation(.smooth(duration: 0.2), value: shown)
-            }
+            Text("\(Int((shown * 100).rounded())) %")
+                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Color.white.opacity(muted ? 0.5 : 0.8))
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .fixedSize()
+                .animation(.smooth(duration: 0.2), value: shown)
         } bottom: {
-            EmptyView()
+            HUDLevelBar(level: shown, tint: muted ? Color.white.opacity(0.35) : accent)
+                .frame(height: 4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -240,15 +231,16 @@ struct HUDLevelView: View {
         case .volume(let isMuted):
             Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill",
                   variableValue: isMuted ? 1 : clamped)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(isMuted ? Color.white.opacity(0.6) : Color.white)
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: reduceMotion ? 0 : revision)
         case .brightness:
             HUDSunIcon(level: clamped)
+                .scaleEffect(0.72)
         case .keyboard:
             Image(systemName: clamped < 0.01 ? "light.min" : "light.max")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.55 + 0.45 * clamped))
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: reduceMotion ? 0 : revision)
@@ -282,7 +274,7 @@ struct HUDSunIcon: View {
     }
 }
 
-/// Skleněná kapsle s výplní v barvě zvýraznění.
+/// Tenká skleněná kapsle s výplní v barvě zvýraznění (plní se zleva doprava, pružně).
 struct HUDLevelBar: View {
     let level: Double
     let tint: Color
@@ -293,12 +285,10 @@ struct HUDLevelBar: View {
             let width: CGFloat = geo.size.width * clamped
             ZStack(alignment: .leading) {
                 Color.clear
-                    .notchGlass(in: Capsule(), tint: Color.white.opacity(0.03))
+                    .notchGlass(in: Capsule(), tint: Color.white.opacity(0.06))
                 Capsule()
-                    .fill(LinearGradient(colors: [tint.opacity(0.8), tint],
-                                         startPoint: .leading, endPoint: .trailing))
+                    .fill(tint)
                     .frame(width: clamped > 0 ? max(width, geo.size.height) : 0)
-                    .shadow(color: tint.opacity(0.6), radius: 3)
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.82), value: level)
@@ -309,30 +299,35 @@ struct HUDLevelBar: View {
 
 struct HUDMediaView: View {
     let action: MediaAction
-    let title: String?
-    let artist: String?
     let revision: Int
     let metrics: HUDMetrics
     let accent: Color
+    @EnvironmentObject private var media: MediaMonitor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Právě zobrazený obal alba (výměna se animuje otočením).
+    @State private var art: NSImage?
+    /// Mění se s každou výměnou obalu – identita pro přechod.
+    @State private var artToken: Int = 0
+    @State private var symbolName: String
     @State private var swoosh: CGFloat = 0
     @State private var swooshOpacity: Double = 1
 
-    private var symbol: String {
+    private static let artSize: CGFloat = 20
+
+    init(action: MediaAction, revision: Int, metrics: HUDMetrics, accent: Color) {
+        self.action = action
+        self.revision = revision
+        self.metrics = metrics
+        self.accent = accent
+        _symbolName = State(initialValue: HUDMediaView.symbol(for: action))
+    }
+
+    private static func symbol(for action: MediaAction) -> String {
         switch action {
         case .play: return "play.fill"
         case .pause: return "pause.fill"
         case .next: return "forward.fill"
         case .previous: return "backward.fill"
-        }
-    }
-
-    private var label: String {
-        switch action {
-        case .play: return "Přehrávání"
-        case .pause: return "Pozastaveno"
-        case .next: return "Další"
-        case .previous: return "Předchozí"
         }
     }
 
@@ -344,77 +339,150 @@ struct HUDMediaView: View {
         }
     }
 
-    private var trackTitle: String {
-        if let title, !title.isEmpty { return title }
-        return label
-    }
-
     var body: some View {
         HUDScaffold(metrics: metrics) {
-            HStack(spacing: 7) {
-                symbolView
-                    .frame(width: 22, height: 22)
-                Text(label)
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.7))
-                    .lineLimit(1)
-                    .fixedSize()
-            }
+            artView
         } right: {
-            VStack(alignment: .leading, spacing: 0) {
-                HUDMarquee(text: trackTitle, size: 11, weight: .semibold, color: Color.white)
-                if let artist, !artist.isEmpty {
-                    Text(artist)
-                        .font(.system(size: 9.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.6))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            symbolView
         } bottom: {
             EmptyView()
         }
-        .onAppear { runSwoosh() }
-        .onChange(of: revision) { _, _ in runSwoosh() }
+        .onAppear { setup() }
+        .onChange(of: revision) { _, _ in refresh() }
+        .onChange(of: media.artwork) { _, image in
+            if let image { swapArt(to: image) }
+        }
     }
+
+    // MARK: Obal alba
+
+    private var artView: some View {
+        ZStack {
+            artTile(art)
+                .id(artToken)
+                .transition(artTransition)
+        }
+        .frame(width: Self.artSize, height: Self.artSize)
+    }
+
+    @ViewBuilder
+    private func artTile(_ image: NSImage?) -> some View {
+        if let image {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: Self.artSize, height: Self.artSize)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        } else {
+            Image(systemName: "music.note")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(accent)
+                .frame(width: Self.artSize, height: Self.artSize)
+        }
+    }
+
+    /// Nový obal se otočí dovnitř ze směru přeskočení, starý se otočí ven.
+    private var artTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        let dir: CGFloat = direction == 0 ? 1 : direction
+        let identity = HUDArtFlipModifier(angle: 0, offsetX: 0, opacity: 1)
+        return .asymmetric(
+            insertion: .modifier(active: HUDArtFlipModifier(angle: -85 * Double(dir), offsetX: 8 * dir, opacity: 0),
+                                 identity: identity),
+            removal: .modifier(active: HUDArtFlipModifier(angle: 85 * Double(dir), offsetX: -8 * dir, opacity: 0),
+                               identity: identity)
+        )
+    }
+
+    private func swapArt(to image: NSImage) {
+        if let current = art, current === image { return }
+        let animation: Animation = reduceMotion
+            ? .easeOut(duration: 0.15)
+            : .spring(response: 0.48, dampingFraction: 0.8)
+        withAnimation(animation) {
+            art = image
+            artToken &+= 1
+        }
+    }
+
+    // MARK: Symbol
 
     private var symbolView: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 15, weight: .bold))
+        Image(systemName: symbolName)
+            .font(.system(size: 12, weight: .bold))
             .foregroundStyle(accent)
             .contentTransition(.symbolEffect(.replace))
-            .symbolEffect(.bounce, value: reduceMotion ? 0 : revision)
             .offset(x: swoosh)
             .opacity(swooshOpacity)
-            .overlay(alignment: direction < 0 ? .trailing : .leading) {
-                if direction != 0 {
-                    // Rychlostní čárky za symbolem.
-                    VStack(spacing: 2.5) {
-                        Capsule().frame(width: 5, height: 1.5)
-                        Capsule().frame(width: 8, height: 1.5)
-                        Capsule().frame(width: 5, height: 1.5)
-                    }
-                    .foregroundStyle(accent.opacity(0.75))
-                    .offset(x: -direction * 9 + swoosh)
-                    .opacity(Double(min(abs(swoosh) / 14, 1)))
-                    .allowsHitTesting(false)
-                }
-            }
+            .frame(width: Self.artSize, height: Self.artSize)
     }
 
-    private func runSwoosh() {
-        guard direction != 0, !reduceMotion else { return }
-        let dir = direction
-        hudRestart {
-            swoosh = -dir * 14
-            swooshOpacity = 0.2
-        } animate: {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
-                swoosh = 0
-                swooshOpacity = 1
+    // MARK: Animace
+
+    private func setup() {
+        let bridge = MediaHUDBridge.shared
+        let current: NSImage? = media.artwork
+        if direction != 0, !reduceMotion, bridge.artworkChangedRecently,
+           let previous = bridge.previousArtwork, let current, current !== previous {
+            // Obal nové skladby už je načtený → začít starým a hned ho otočit na nový.
+            art = previous
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                swapArt(to: current)
+            }
+        } else {
+            // Obal nové skladby se teprve načítá → zatím poslední známý, výměnu spustí onChange.
+            art = current ?? bridge.lastArtwork
+        }
+        animateSymbol()
+    }
+
+    private func refresh() {
+        if let current = media.artwork { swapArt(to: current) }
+        animateSymbol()
+    }
+
+    private func animateSymbol() {
+        let target = Self.symbol(for: action)
+        if reduceMotion {
+            symbolName = target
+            return
+        }
+        if direction == 0 {
+            // Play / pauza: symbol se promění z opačného stavu.
+            let from: String = action == .play ? "pause.fill" : "play.fill"
+            hudRestart {
+                symbolName = from
+            } animate: {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { symbolName = target }
+            }
+        } else {
+            symbolName = target
+            let dir = direction
+            hudRestart {
+                swoosh = -dir * 10
+                swooshOpacity = 0.2
+            } animate: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
+                    swoosh = 0
+                    swooshOpacity = 1
+                }
             }
         }
+    }
+}
+
+/// Otočení obalu alba kolem svislé osy s posunem a prolnutím.
+struct HUDArtFlipModifier: ViewModifier {
+    let angle: Double
+    let offsetX: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+            .offset(x: offsetX)
+            .opacity(opacity)
     }
 }
 

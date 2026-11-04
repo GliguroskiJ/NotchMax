@@ -228,3 +228,28 @@ struct GlassPill: View {
         .hoverScale(1.04)
     }
 }
+
+/// Kulaté skleněné tlačítko pro ovládání přehrávání. Každé tlačítko má vlastní sklo
+/// (bez společné kapsle); zvýrazněné (play/pauza) je větší a podbarvené.
+struct GlassTransportButton: View {
+    let symbol: String
+    var size: CGFloat = 30
+    var prominent = false
+    var tint: Color?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size * (prominent ? 0.4 : 0.36), weight: .bold))
+                .foregroundStyle(Color.white)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: size, height: size)
+                .contentShape(Circle())
+        }
+        .buttonStyle(NotchGlassButtonStyle(shape: Circle(),
+                                           tint: prominent ? (tint ?? Color.white.opacity(0.22)) : nil))
+        .hoverScale(prominent ? 1.06 : 1.08)
+        .animation(.smooth(duration: 0.2), value: symbol)
+    }
+}
