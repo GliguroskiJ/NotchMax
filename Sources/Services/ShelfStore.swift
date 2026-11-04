@@ -57,14 +57,16 @@ final class ShelfStore: ObservableObject {
             do {
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 try FileManager.default.copyItem(at: source, to: dest)
-                await MainActor.run {
-                    self?.items.insert(ShelfItem(id: id, url: dest, added: Date()), at: 0)
-                }
+                await self?.insert(ShelfItem(id: id, url: dest, added: Date()))
             } catch {
                 NSLog("NotchMax shelf: \(error.localizedDescription)")
                 try? FileManager.default.removeItem(at: dir)
             }
         }
+    }
+
+    private func insert(_ item: ShelfItem) {
+        items.insert(item, at: 0)
     }
 
     // MARK: - Odebrání

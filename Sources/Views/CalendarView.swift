@@ -65,8 +65,7 @@ struct CalendarView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch calendar.access {
-        case .granted:
+        if calendar.hasAnySource {
             if calendar.events.isEmpty {
                 EmptyState(symbol: "checkmark.circle", title: "Volno", message: "Žádné události dnes ani zítra")
             } else {
@@ -79,14 +78,14 @@ struct CalendarView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-        case .unknown:
+        } else {
             VStack(spacing: 10) {
-                EmptyState(symbol: "calendar", title: "Kalendář", message: "NotchMax potřebuje přístup ke kalendáři")
-                GlassPill(title: "Povolit přístup", symbol: "lock.open.fill") { calendar.requestAccess() }
+                EmptyState(symbol: "calendar", title: "Kalendář",
+                           message: calendar.access == .denied
+                               ? "Přístup ke kalendářům macOS je zamítnutý. Připoj Google nebo povol přístup v Nastavení."
+                               : "Připoj kalendáře macOS nebo se přihlas ke Google Kalendáři.")
+                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus") { openNotchMaxSettings(section: "calendar") }
             }
-        case .denied:
-            EmptyState(symbol: "lock.fill", title: "Přístup zamítnut",
-                       message: "Povol ho v Nastavení → Soukromí → Kalendáře.")
         }
     }
 

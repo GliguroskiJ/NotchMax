@@ -22,6 +22,17 @@ enum NotchPath {
         if closed { p.closeSubpath() }
         return p
     }
+
+    /// Otevřený obrys pro animaci nabíjení. Levá / pravá svislá část se posune o `insetLeft` /
+    /// `insetRight` bodů dovnitř (kladné) nebo ven (záporné), aby šlo obrys doladit na fyzický notch.
+    /// Cesta začíná vlevo nahoře, vede dolů, po spodní hraně a nahoru doprava.
+    static func chargeOutline(in rect: CGRect, top: CGFloat, bottom: CGFloat,
+                              insetLeft: CGFloat, insetRight: CGFloat) -> Path {
+        let minWidth: CGFloat = 2 * top + 2 * bottom
+        let width: CGFloat = max(rect.width - insetLeft - insetRight, minWidth)
+        let r = CGRect(x: rect.minX + insetLeft, y: rect.minY, width: width, height: rect.height)
+        return make(in: r, top: top, bottom: bottom, closed: false)
+    }
 }
 
 /// Uzavřený tvar pro výplň (černé pozadí notche).
@@ -39,7 +50,7 @@ struct NotchShape: Shape {
     }
 }
 
-/// Otevřený obrys (bez horní hrany) pro glow, nabíjecí sweep a progress.
+/// Otevřený obrys (bez horní hrany) – jemná linka kolem rozbaleného panelu.
 struct NotchOutline: Shape {
     var topRadius: CGFloat
     var bottomRadius: CGFloat

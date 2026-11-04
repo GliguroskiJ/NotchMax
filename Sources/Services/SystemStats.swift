@@ -2,7 +2,8 @@ import Foundation
 import Combine
 import Darwin
 
-/// Živé systémové statistiky (CPU, paměť, síť, disk). Vzorkuje jen mezi `start()` a `stop()`.
+/// Živé systémové statistiky (CPU, paměť, síť, disk, teplota, ventilátory, GPU, baterie).
+/// Vzorkuje jen mezi `start()` a `stop()`. IOKit/SMC čtení běží mimo hlavní vlákno.
 @MainActor
 final class SystemStats: ObservableObject {
     static let shared = SystemStats()
@@ -24,10 +25,31 @@ final class SystemStats: ObservableObject {
     @Published private(set) var netDownHistory: [Double] = []
     @Published private(set) var netUpHistory: [Double] = []
 
+    // MARK: Senzory (SMC, GPU, baterie) – vzorkováno každé 2 s na pozadí
+    /// `false`, dokud nedorazí první vzorek senzorů.
+    @Published private(set) var sensorsLoaded = false
+    /// Teplota CPU v °C, `nil` = nedostupné.
+    @Published private(set) var cpuTemperature: Double?
+    /// Počet ventilátorů, `nil` = nedostupné (0 = bez ventilátoru).
+    @Published private(set) var fanCount: Int?
+    /// Průměrné otáčky ventilátorů v RPM.
+    @Published private(set) var fanRPM: Double?
+    /// Vytížení GPU 0…1, `nil` = nedostupné.
+    @Published private(set) var gpuUtilization: Double?
+    @Published private(set) var gpuHistory: [Double] = []
+    /// `nil` = bez baterie (desktop).
+    @Published private(set) var battery: SensorsBatteryInfo?
+    /// Doba běhu systému v sekundách.
+    @Published private(set) var uptime: TimeInterval = 0
+
     // MARK: Interní stav
     private var timer: Timer?
     private var prevCPUTicks: (user: UInt64, system: UInt64, idle: UInt64, nice: UInt64)?
     private var prevNet: (down: UInt64, up: UInt64, time: TimeInterval)?
+    private var tickCount = 0
+    private var sensorsInFlight = false
+    private let sensorsQueue = DispatchQueue(label: "com.jovan.NotchMax.sensors", qos: .utility)
+    private let sensorsSampler = SensorsSampler()
 
     private init() {}
 
@@ -51,6 +73,7 @@ final class SystemStats: ObservableObject {
         // Při dalším startu se rozdíly počítají znovu od nuly (žádný falešný skok).
         prevCPUTicks = nil
         prevNet = nil
+        tickCount = 0
     }
 
     // MARK: Vzorkování
@@ -60,6 +83,41 @@ final class SystemStats: ObservableObject {
         sampleMemory()
         sampleNetwork()
         sampleDisk()
+        // Senzory stačí každé 2 s (timer tiká po 1 s).
+        if tickCount % 2 == 0 {
+            sampleSensors()
+        }
+        tickCount &+= 1
+    }
+
+    // MARK: Senzory
+
+    private func sampleSensors() {
+        guard !sensorsInFlight else { return }
+        sensorsInFlight = true
+        let sampler = sensorsSampler
+        sensorsQueue.async {
+            let snapshot = sampler.sample()
+            Task { @MainActor in
+                SystemStats.shared.applySensors(snapshot)
+            }
+        }
+    }
+
+    private func applySensors(_ snapshot: SensorsSnapshot) {
+        sensorsInFlight = false
+        sensorsLoaded = true
+        cpuTemperature = snapshot.cpuTemperature
+        fanCount = snapshot.fanCount
+        fanRPM = snapshot.fanRPM
+        gpuUtilization = snapshot.gpuUtilization
+        if let gpu = snapshot.gpuUtilization {
+            append(gpu, to: &gpuHistory)
+        }
+        if battery != snapshot.battery {
+            battery = snapshot.battery
+        }
+        uptime = snapshot.uptime
     }
 
     private func append(_ value: Double, to array: inout [Double]) {

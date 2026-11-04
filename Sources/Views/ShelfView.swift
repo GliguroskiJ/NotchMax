@@ -45,8 +45,8 @@ struct ShelfView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .notchGlass(in: dropShape, tint: targeted ? settings.accent.color.opacity(0.22) : Color.white.opacity(0.06))
-        .background(dropShape.fill(Color.black.opacity(0.28)))
+        .background(dropShape.fill(targeted ? settings.accent.color.opacity(0.18) : Color.white.opacity(0.05)))
+        .background(dropShape.fill(Color.black.opacity(0.3)))
         .overlay(dropShape.strokeBorder(border, style: StrokeStyle(lineWidth: 1, dash: dash)))
         .animation(.smooth(duration: 0.2), value: targeted)
         .onDrop(of: [UTType.fileURL], isTargeted: $targeted) { providers in

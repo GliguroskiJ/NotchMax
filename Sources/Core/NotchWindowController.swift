@@ -85,6 +85,13 @@ final class NotchWindowController {
             .sink { [weak self] enabled in self?.configureHotKey(enabled: enabled) }
             .store(in: &cancellables)
 
+        // Náhled: při ladění posunu obrysu nabíjení v Nastavení animaci hned přehrát.
+        services.settings.$chargeInsetLeft.dropFirst()
+            .merge(with: services.settings.$chargeInsetRight.dropFirst())
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.vm.runChargeAnimation() }
+            .store(in: &cancellables)
+
         services.battery.onPlugIn = { [weak self] in
             guard let self, self.services.settings.chargingAnimation else { return }
             self.vm.runChargeAnimation()
@@ -132,10 +139,14 @@ final class NotchWindowController {
 
     private func closedHotRect() -> CGRect {
         let n = vm.geometry.notchSize
-        let w = n.width + 2 * NotchLayout.sideActivityText + 24
-        return CGRect(x: screenFrame.midX - w / 2,
+        // Oblast kopíruje skutečný (i asymetrický) tvar s live activity, minimálně ale pevný okraj.
+        let sides = vm.closedSideWidths
+        let edge = NotchLayout.closedTopRadius + 12
+        let left = max(sides.left + edge, NotchLayout.hoverSideMin)
+        let right = max(sides.right + edge, NotchLayout.hoverSideMin)
+        return CGRect(x: screenFrame.midX - n.width / 2 - left,
                       y: screenFrame.maxY - n.height - 2 + CGFloat(services.settings.notchOffsetY),
-                      width: w,
+                      width: n.width + left + right,
                       height: n.height + 8)
     }
 

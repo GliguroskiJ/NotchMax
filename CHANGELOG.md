@@ -2,6 +2,22 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.8
+Novinky
+- Dvě aktivity naráz: vlevo a vpravo od notche si vybereš, co se zobrazí (hudba, časovač, schůzka, baterie, Claude)
+- Nová animace nabíjení: pulzy běží po obrysu notche zleva doprava až k bodu podle procent baterie
+- Nastavení zúžení levé a pravé strany obrysu nabíjení (Vzhled → Animace nabíjení)
+- Statistiky mají 8 ukazatelů: teplota CPU, ventilátory, GPU a energie / zdraví baterie
+- Focus časovač umí zapnout a po skončení vypnout Soustředění na Macu (přes Zkratky)
+- Nová záložka Agenti s přehledem relací Claude Code
+- Google kalendář: výběr kalendářů a přímé přihlášení přes Google
+- Nová ikona aplikace
+Úpravy
+- Skleněný vzhled je stejný, ať do panelu klikneš, nebo ne
+- Svítící obrys kolem notche je pryč
+- Lepší okraje u živých aktivit vedle notche
+- Odebrány Zkratky, Počasí a Poznámky
+
 ## 0.1.7
 Opravy
 - Okno Nastavení se už samo neotevírá po spuštění ani po aktualizaci

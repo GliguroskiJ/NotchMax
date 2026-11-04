@@ -85,7 +85,15 @@ final class SettingsWindowController {
     }
 }
 
+/// Požadovaná sekce nastavení (např. „calendar“), kterou okno nastavení přepne při otevření.
 @MainActor
-func openNotchMaxSettings() {
+final class SettingsNavigator: ObservableObject {
+    static let shared = SettingsNavigator()
+    @Published var requestedSection: String?
+}
+
+@MainActor
+func openNotchMaxSettings(section: String? = nil) {
+    if let section { SettingsNavigator.shared.requestedSection = section }
     SettingsWindowController.shared.show()
 }

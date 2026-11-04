@@ -6,38 +6,21 @@ import SwiftUI
 final class ShortcutsStore: ObservableObject {
     static let shared = ShortcutsStore()
 
+    /// Názvy zkratek uživatele (seřazené).
     @Published private(set) var shortcuts: [String] = []
+    /// `true`, jakmile se seznam aspoň jednou úspěšně načetl.
+    @Published private(set) var hasLoaded = false
+    @Published private(set) var isReloading = false
     @Published private(set) var runningName: String?
     @Published private(set) var lastError: String?
-    /// Připnuté zkratky (v pořadí připnutí), uložené v UserDefaults.
-    @Published private(set) var pinned: [String] = []
 
-    private static let pinnedKey = "pinnedShortcuts"
     private var errorTask: Task<Void, Never>?
-    private var isReloading = false
 
-    private init() {
-        pinned = UserDefaults.standard.stringArray(forKey: ShortcutsStore.pinnedKey) ?? []
-    }
+    private init() {}
 
-    /// Seznam k zobrazení: nejdřív připnuté (které existují), pak ostatní.
-    var orderedShortcuts: [String] {
-        let pinnedExisting: [String] = pinned.filter { shortcuts.contains($0) }
-        let rest: [String] = shortcuts.filter { !pinned.contains($0) }
-        return pinnedExisting + rest
-    }
-
-    func isPinned(_ name: String) -> Bool {
-        pinned.contains(name)
-    }
-
-    func togglePin(_ name: String) {
-        if let index = pinned.firstIndex(of: name) {
-            pinned.remove(at: index)
-        } else {
-            pinned.append(name)
-        }
-        UserDefaults.standard.set(pinned, forKey: ShortcutsStore.pinnedKey)
+    /// Existuje zkratka daného názvu? (Má smysl jen po načtení, viz `hasLoaded`.)
+    func contains(_ name: String) -> Bool {
+        shortcuts.contains(name)
     }
 
     /// Načte názvy zkratek na pozadí.
@@ -55,6 +38,7 @@ final class ShortcutsStore: ObservableObject {
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                 self.shortcuts = lines.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+                self.hasLoaded = true
             } else {
                 self.shortcuts = []
                 self.showError("Zkratky se nepodařilo načíst")
@@ -62,7 +46,7 @@ final class ShortcutsStore: ObservableObject {
         }
     }
 
-    /// Spustí zkratku podle názvu.
+    /// Spustí zkratku podle názvu (s UI stavem `runningName` / `lastError`).
     func run(_ name: String) {
         if runningName != nil { return }
         runningName = name
@@ -74,15 +58,20 @@ final class ShortcutsStore: ObservableObject {
             }.value
             self.runningName = nil
             if result.status != 0 {
-                let firstLine: String = result.errorOutput
-                    .components(separatedBy: "\n")
-                    .first?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if firstLine.isEmpty {
-                    self.showError("Zkratka selhala (kód \(result.status))")
-                } else {
-                    self.showError(String(firstLine.prefix(70)))
-                }
+                self.showError(ShortcutsStore.errorMessage(for: result))
+            }
+        }
+    }
+
+    /// Spustí zkratku na pozadí bez zásahu do UI stavu. Při chybě zavolá `onFailure`
+    /// (na hlavním vlákně) s krátkým popisem.
+    func runSilently(_ name: String, onFailure: (@MainActor (String) -> Void)? = nil) {
+        Task {
+            let result: ExecResult = await Task.detached {
+                ShortcutsStore.exec(["run", name])
+            }.value
+            if result.status != 0 {
+                onFailure?(ShortcutsStore.errorMessage(for: result))
             }
         }
     }
@@ -104,6 +93,17 @@ final class ShortcutsStore: ObservableObject {
         let status: Int32
         let output: String
         let errorOutput: String
+    }
+
+    nonisolated private static func errorMessage(for result: ExecResult) -> String {
+        let firstLine: String = result.errorOutput
+            .components(separatedBy: "\n")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if firstLine.isEmpty {
+            return "Zkratka selhala (kód \(result.status))"
+        }
+        return String(firstLine.prefix(70))
     }
 
     /// Synchronní spuštění `shortcuts` s argumenty; volat mimo hlavní vlákno.

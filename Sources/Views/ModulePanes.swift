@@ -29,7 +29,9 @@ struct PaneSwitcher<T: Hashable>: View {
                     .frame(height: 24)
                     .background {
                         if active {
-                            Capsule().fill(settings.accent.color.opacity(0.3))
+                            Capsule()
+                                .fill(settings.accent.color.opacity(0.3))
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 0.5))
                         }
                     }
                     .contentShape(Capsule())
@@ -42,51 +44,18 @@ struct PaneSwitcher<T: Hashable>: View {
     }
 }
 
-enum ToolsSection: Hashable { case timer, shortcuts, notes }
-enum SystemSection: Hashable { case stats, weather }
-
-/// Záložka Nástroje: časovač, Zkratky, poznámky.
+/// Záložka Nástroje: focus časovač.
 struct ToolsHubView: View {
-    @State private var section: ToolsSection = .timer
-
     var body: some View {
-        VStack(alignment: .leading, spacing: NotchLayout.spacingS) {
-            PaneSwitcher<ToolsSection>(items: [
-                PaneSwitcher<ToolsSection>.Item(value: .timer, title: "Časovač", symbol: "timer"),
-                PaneSwitcher<ToolsSection>.Item(value: .shortcuts, title: "Zkratky", symbol: "bolt.fill"),
-                PaneSwitcher<ToolsSection>.Item(value: .notes, title: "Poznámky", symbol: "note.text")
-            ], selection: $section)
-            Group {
-                switch section {
-                case .timer: ToolsView()
-                case .shortcuts: ShortcutsView()
-                case .notes: NotesView()
-                }
-            }
+        ToolsView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .transition(.opacity)
-        }
     }
 }
 
-/// Záložka Systém: statistiky a počasí.
+/// Záložka Systém: 8 ukazatelů.
 struct SystemHubView: View {
-    @State private var section: SystemSection = .stats
-
     var body: some View {
-        VStack(alignment: .leading, spacing: NotchLayout.spacingS) {
-            PaneSwitcher<SystemSection>(items: [
-                PaneSwitcher<SystemSection>.Item(value: .stats, title: "Statistiky", symbol: "gauge.with.dots.needle.67percent"),
-                PaneSwitcher<SystemSection>.Item(value: .weather, title: "Počasí", symbol: "cloud.sun.fill")
-            ], selection: $section)
-            Group {
-                switch section {
-                case .stats: StatsView()
-                case .weather: WeatherView()
-                }
-            }
+        StatsView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .transition(.opacity)
-        }
     }
 }

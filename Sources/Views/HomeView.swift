@@ -153,22 +153,20 @@ struct NextEventCard: View {
 
     @ViewBuilder
     private var content: some View {
-        switch calendar.access {
-        case .granted:
+        if calendar.hasAnySource {
             if let e = calendar.nextMeeting {
                 meeting(e)
             } else {
                 emptyRow(symbol: "checkmark.circle", title: "Žádné další schůzky", subtitle: dayLongSubtitle)
             }
-        case .unknown:
+        } else {
+            // Není připojený žádný zdroj – nastavení nabídne kalendáře macOS i přímé přihlášení ke Googlu.
             VStack(alignment: .leading, spacing: 6) {
                 Text("Kalendář")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.white)
-                GlassPill(title: "Povolit přístup", symbol: "calendar.badge.plus") { calendar.requestAccess() }
+                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus") { openNotchMaxSettings(section: "calendar") }
             }
-        case .denied:
-            emptyRow(symbol: "lock.fill", title: "Kalendář bez přístupu", subtitle: "Povol ho v Nastavení → Soukromí")
         }
     }
 

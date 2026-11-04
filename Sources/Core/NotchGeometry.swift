@@ -25,16 +25,27 @@ struct NotchGeometry {
 }
 
 enum NotchLayout {
-    /// Pevná velikost průhledného okna (obsahuje i prostor pro glow a stín).
+    /// Pevná velikost průhledného okna (obsahuje i prostor pro stín a animaci nabíjení).
     static let panelSize = CGSize(width: 720, height: 320)
     /// Velikost rozbaleného notche.
     static let openSize = CGSize(width: 620, height: 252)
-    /// Šířka jedné strany „live activity“ vedle notche.
-    static let sideActivity: CGFloat = 26
-    /// Širší strany pro živou aktivitu s textem (časovač, schůzka).
-    static let sideActivityText: CGFloat = 40
-    /// O kolik tvar vyčnívá pod fyzický notch, aby byl obrys a glow vidět.
-    static let lip: CGFloat = 5
+
+    // MARK: Zavřený notch a live activity
+    /// Horní (vnější) zaoblení zavřeného tvaru – o tolik tvar na každé straně přesahuje fyzický notch.
+    static let closedTopRadius: CGFloat = 6
+    /// Spodní zaoblení zavřeného tvaru. Souzní s odsazením obsahu: ikona 18 pt má ve výšce ~34 pt
+    /// svisle ~8 pt volna a obal alba poloměr 5, takže 8 + 5 = 13.
+    static let closedBottomRadius: CGFloat = 13
+    /// Odsazení obsahu live activity od vnějšího (zaobleného) okraje.
+    static let compactOuterPadding: CGFloat = 12
+    /// Odsazení obsahu live activity od fyzického notche.
+    static let compactInnerPadding: CGFloat = 4
+    /// Velikost ikony / obalu alba v live activity.
+    static let compactIcon: CGFloat = 18
+    /// Mezera mezi ikonou a detailem uvnitř jednoho widgetu.
+    static let compactGap: CGFloat = 6
+    /// Minimální šířka oblasti pro najetí myší vedle notche (na každou stranu).
+    static let hoverSideMin: CGFloat = 52
 
     // MARK: Rozestupy (jednotná škála 8 / 12 / 14)
     static let spacingS: CGFloat = 8

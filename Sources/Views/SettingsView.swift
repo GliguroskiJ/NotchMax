@@ -5,7 +5,7 @@ import ServiceManagement
 // MARK: - Sekce
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, appearance, modules, calendar, updates
+    case general, appearance, activities, modules, calendar, agents, updates
 
     var id: String { rawValue }
 
@@ -13,8 +13,10 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "Obecné"
         case .appearance: return "Vzhled"
+        case .activities: return "Aktivity"
         case .modules: return "Moduly"
         case .calendar: return "Kalendář"
+        case .agents: return "Agenti"
         case .updates: return "Aktualizace"
         }
     }
@@ -22,9 +24,11 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: return "gearshape"
-        case .appearance: return "sparkles"
+        case .appearance: return "paintpalette"
+        case .activities: return "rectangle.split.2x1"
         case .modules: return "square.grid.2x2"
         case .calendar: return "calendar"
+        case .agents: return "sparkles"
         case .updates: return "arrow.triangle.2.circlepath"
         }
     }
@@ -64,6 +68,13 @@ private struct VisualEffectBackground: NSViewRepresentable {
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var selection: SettingsSection = .general
+    @ObservedObject private var navigator = SettingsNavigator.shared
+
+    private func applyRequestedSection() {
+        guard let raw = navigator.requestedSection else { return }
+        if let section = SettingsSection(rawValue: raw) { selection = section }
+        navigator.requestedSection = nil
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -94,6 +105,10 @@ struct SettingsView: View {
         }
         .frame(width: 900, height: 620)
         .background(VisualEffectBackground())
+        .onAppear { applyRequestedSection() }
+        .onReceive(navigator.$requestedSection) { value in
+            if value != nil { DispatchQueue.main.async { applyRequestedSection() } }
+        }
         .ignoresSafeArea()
         .animation(.smooth, value: selection)
         .preferredColorScheme(.dark)
@@ -104,8 +119,10 @@ struct SettingsView: View {
         switch selection {
         case .general: GeneralSettings()
         case .appearance: AppearanceSettings()
+        case .activities: ActivitiesSettings()
         case .modules: ModulesSettings()
         case .calendar: CalendarSettings()
+        case .agents: ClaudeSettingsSection()
         case .updates: UpdateSettings()
         }
     }
@@ -131,6 +148,10 @@ private struct SettingsSidebar: View {
     @Binding var selection: SettingsSection
     @EnvironmentObject private var settings: AppSettings
 
+    init(selection: Binding<SettingsSection>) {
+        self._selection = selection
+    }
+
     private var shortVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
@@ -143,8 +164,10 @@ private struct SettingsSidebar: View {
             SidebarGroupTitle(title: "Obecné")
             SidebarItem(section: .general, isSelected: selection == .general) { selection = .general }
             SidebarItem(section: .appearance, isSelected: selection == .appearance) { selection = .appearance }
+            SidebarItem(section: .activities, isSelected: selection == .activities) { selection = .activities }
             SidebarItem(section: .modules, isSelected: selection == .modules) { selection = .modules }
             SidebarItem(section: .calendar, isSelected: selection == .calendar) { selection = .calendar }
+            SidebarItem(section: .agents, isSelected: selection == .agents) { selection = .agents }
 
             SidebarGroupTitle(title: "Aplikace")
             SidebarItem(section: .updates, isSelected: selection == .updates) { selection = .updates }
@@ -184,6 +207,12 @@ private struct SidebarItem: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var hovering = false
 
+    init(section: SettingsSection, isSelected: Bool, action: @escaping () -> Void) {
+        self.section = section
+        self.isSelected = isSelected
+        self.action = action
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
@@ -213,7 +242,7 @@ private struct SidebarItem: View {
 
 // MARK: - Sdílené stavební prvky
 
-private struct SettingsCard<Content: View>: View {
+struct SettingsCard<Content: View>: View {
     var header: String?
     let content: () -> Content
 
@@ -247,7 +276,7 @@ private struct SettingsCard<Content: View>: View {
     }
 }
 
-private struct SettingsDivider: View {
+struct SettingsDivider: View {
     var body: some View {
         Rectangle()
             .fill(Color.white.opacity(0.07))
@@ -255,7 +284,7 @@ private struct SettingsDivider: View {
     }
 }
 
-private struct SettingsRow<Trailing: View>: View {
+struct SettingsRow<Trailing: View>: View {
     let title: String
     var subtitle: String?
     let trailing: () -> Trailing
@@ -287,11 +316,17 @@ private struct SettingsRow<Trailing: View>: View {
     }
 }
 
-private struct SettingsToggleRow: View {
+struct SettingsToggleRow: View {
     let title: String
     var subtitle: String?
     @Binding var isOn: Bool
     @EnvironmentObject private var settings: AppSettings
+
+    init(title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isOn = isOn
+    }
 
     var body: some View {
         SettingsRow(title: title, subtitle: subtitle) {
@@ -303,7 +338,7 @@ private struct SettingsToggleRow: View {
     }
 }
 
-private struct SettingsNote: View {
+struct SettingsNote: View {
     let symbol: String
     let text: String
 
@@ -447,77 +482,6 @@ private struct AccentTile: View {
     }
 }
 
-private struct GlowPreview: View {
-    let style: GlowStyle
-    let color: Color
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.black)
-            outline
-        }
-        .frame(width: 48, height: 24)
-    }
-
-    @ViewBuilder
-    private var outline: some View {
-        switch style {
-        case .off:
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.18),
-                              style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        case .pulse:
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(color, lineWidth: 1.5)
-                .shadow(color: color.opacity(0.8), radius: 4)
-        case .aurora:
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(
-                    AngularGradient(colors: [color, Color.purple, Color.blue, color], center: .center),
-                    lineWidth: 1.5
-                )
-        case .minimal:
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(color.opacity(0.55), lineWidth: 0.75)
-        }
-    }
-}
-
-private struct GlowTile: View {
-    let style: GlowStyle
-    let accent: Color
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                GlowPreview(style: style, color: accent)
-                Text(style.title)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.65))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity)
-            .frame(height: 72)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(isSelected ? 0.1 : 0.04))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(isSelected ? accent : Color.white.opacity(0.08),
-                                  lineWidth: isSelected ? 1.5 : 0.75)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 private struct AppearanceSettings: View {
     @EnvironmentObject private var settings: AppSettings
 
@@ -528,18 +492,6 @@ private struct AppearanceSettings: View {
                     ForEach(AccentChoice.allCases) { choice in
                         AccentTile(choice: choice, isSelected: settings.accent == choice) {
                             withAnimation(.smooth(duration: 0.25)) { settings.accent = choice }
-                        }
-                    }
-                }
-                .padding(.vertical, 12)
-            }
-
-            SettingsCard(header: "Svítící obrys kolem notche") {
-                HStack(spacing: 8) {
-                    ForEach(GlowStyle.allCases) { style in
-                        GlowTile(style: style, accent: settings.accent.color,
-                                 isSelected: settings.glowStyle == style) {
-                            withAnimation(.smooth(duration: 0.25)) { settings.glowStyle = style }
                         }
                     }
                 }
@@ -581,13 +533,26 @@ private struct AppearanceSettings: View {
                 }
             }
 
-            SettingsCard(header: "Nabíjení") {
+            SettingsCard(header: "Animace nabíjení") {
                 SettingsToggleRow(title: "Animace při zapojení nabíječky",
                                   isOn: $settings.chargingAnimation)
                 SettingsDivider()
+                ChargeInsetRow(title: "Levá strana", value: $settings.chargeInsetLeft)
+                SettingsDivider()
+                ChargeInsetRow(title: "Pravá strana", value: $settings.chargeInsetRight)
+                SettingsDivider()
+                SettingsNote(symbol: "info.circle",
+                             text: "Zúží (+) nebo rozšíří (−) obrys nabíjení. Po změně se animace přehraje.")
+                SettingsDivider()
                 SettingsRow(title: "Vyzkoušet animaci") {
-                    GlassPill(title: "Přehrát", symbol: "play.fill") {
-                        AppServices.shared.viewModel?.runChargeAnimation()
+                    HStack(spacing: 8) {
+                        GlassPill(title: "Obnovit") {
+                            settings.chargeInsetLeft = 0
+                            settings.chargeInsetRight = 0
+                        }
+                        GlassPill(title: "Přehrát", symbol: "play.fill") {
+                            AppServices.shared.viewModel?.runChargeAnimation()
+                        }
                     }
                 }
             }
@@ -595,8 +560,152 @@ private struct AppearanceSettings: View {
             SettingsCard {
                 SettingsNote(
                     symbol: "moon.fill",
-                    text: "Aplikace je záměrně jen v tmavém režimu, aby splynula s černým notchem. Prvky Liquid Glass se používají na macOS 26 a novějších, na starších systémech je náhrada ze skleněného materiálu."
+                    text: "Aplikace je záměrně jen v tmavém režimu, aby splynula s černým notchem. Skleněné prvky vypadají stejně, ať je panel aktivní, nebo ne."
                 )
+            }
+        }
+    }
+}
+
+/// Řádek s posuvníkem pro zúžení / rozšíření jedné strany obrysu nabíjení.
+private struct ChargeInsetRow: View {
+    let title: String
+    @Binding var value: Double
+    @EnvironmentObject private var settings: AppSettings
+
+    init(title: String, value: Binding<Double>) {
+        self.title = title
+        self._value = value
+    }
+
+    var body: some View {
+        SettingsRow(title: title) {
+            HStack(spacing: 10) {
+                Slider(value: $value, in: -12...12, step: 0.5)
+                    .tint(settings.accent.color)
+                    .frame(width: 130)
+                Text(String(format: "%+.1f px", value))
+                    .font(.system(size: 13.5, weight: .medium).monospacedDigit())
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .frame(width: 60, alignment: .trailing)
+                Button {
+                    value = 0
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(value == 0 ? 0.25 : 0.7))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(value == 0)
+                .help("Vrátit na 0")
+            }
+        }
+    }
+}
+
+// MARK: - Aktivity
+
+/// Dlaždice pro výběr možnosti se symbolem — stejný styl jako výběr akcentní barvy.
+struct SettingsChipTile: View {
+    let title: String
+    let symbol: String
+    let isSelected: Bool
+    let action: () -> Void
+    @EnvironmentObject private var settings: AppSettings
+
+    init(title: String, symbol: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.symbol = symbol
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? settings.accent.color : Color.white.opacity(0.6))
+                    .frame(height: 20)
+                Text(title)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.65))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(isSelected ? 0.1 : 0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(isSelected ? settings.accent.color : Color.white.opacity(0.08),
+                                  lineWidth: isSelected ? 1.5 : 0.75)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ActivitySlotPicker: View {
+    let title: String
+    @Binding var selection: ActivitySlot
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.white)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                ForEach(ActivitySlot.allCases) { slot in
+                    SettingsChipTile(title: slot.title, symbol: slot.symbol,
+                                     isSelected: selection == slot) {
+                        withAnimation(.smooth(duration: 0.25)) { selection = slot }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 12)
+    }
+}
+
+private struct ActivitiesSettings: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsCard(header: "Rozložení") {
+                SettingsToggleRow(title: "Dvě aktivity (vlevo a vpravo)",
+                                  subtitle: "Na každé straně notche se zobrazí jiná aktivita.",
+                                  isOn: $settings.dualActivities)
+                if settings.dualActivities {
+                    SettingsDivider()
+                    ActivitySlotPicker(title: "Levá strana", selection: $settings.leftActivity)
+                    SettingsDivider()
+                    ActivitySlotPicker(title: "Pravá strana", selection: $settings.rightActivity)
+                }
+            }
+            .animation(.smooth(duration: 0.25), value: settings.dualActivities)
+
+            SettingsCard(header: "Živé aktivity vedle notche") {
+                SettingsToggleRow(title: "Hudba", subtitle: "Obal alba a ekvalizér.",
+                                  isOn: $settings.liveMusic)
+                SettingsDivider()
+                SettingsToggleRow(title: "Časovač", isOn: $settings.liveTimer)
+                SettingsDivider()
+                SettingsToggleRow(title: "Blížící se schůzka", subtitle: "Zobrazí se 10 minut předem.",
+                                  isOn: $settings.liveCalendar)
+                SettingsDivider()
+                SettingsToggleRow(title: "Claude agenti", subtitle: "Stav běžících Claude agentů.",
+                                  isOn: $settings.liveClaude)
             }
         }
     }
@@ -609,103 +718,24 @@ private struct ModulesSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Živé aktivity vedle notche") {
-                SettingsToggleRow(title: "Hudba", subtitle: "Obal alba a ekvalizér.",
-                                  isOn: $settings.liveMusic)
-                SettingsDivider()
-                SettingsToggleRow(title: "Časovač", isOn: $settings.liveTimer)
-                SettingsDivider()
-                SettingsToggleRow(title: "Blížící se schůzka", subtitle: "Zobrazí se 10 minut předem.",
-                                  isOn: $settings.liveCalendar)
-                SettingsDivider()
-                SettingsToggleRow(title: "Nabíjení", isOn: $settings.liveBattery)
-            }
-
             SettingsCard(header: "Záložky v rozbaleném notchi") {
                 SettingsToggleRow(title: "Kalendář", isOn: $settings.tabCalendar)
                 SettingsDivider()
                 SettingsToggleRow(title: "Odkladiště souborů", isOn: $settings.tabShelf)
                 SettingsDivider()
-                SettingsToggleRow(title: "Nástroje", subtitle: "Časovač, Zkratky a rychlé poznámky.", isOn: $settings.tabTools)
+                SettingsToggleRow(title: "Nástroje", subtitle: "Časovač a další rychlé nástroje.", isOn: $settings.tabTools)
                 SettingsDivider()
-                SettingsToggleRow(title: "Systém", subtitle: "Statistiky CPU, paměti, sítě a počasí.", isOn: $settings.tabSystem)
+                SettingsToggleRow(title: "Systém", subtitle: "Statistiky CPU, paměti a sítě.", isOn: $settings.tabSystem)
+                SettingsDivider()
+                SettingsToggleRow(title: "Agenti", subtitle: "Přehled Claude agentů.", isOn: $settings.tabAgents)
             }
+
+            FocusSettingsSection()
         }
     }
 }
 
-// MARK: - Kalendář
-
-private struct CalendarSettings: View {
-    @EnvironmentObject private var calendar: CalendarMonitor
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Přístup") {
-                SettingsRow(title: "Stav") {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 8, height: 8)
-                        Text(statusText)
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(Color.white.opacity(0.7))
-                    }
-                }
-                if calendar.access == .unknown {
-                    SettingsDivider()
-                    SettingsRow(title: "Přístup ke kalendáři") {
-                        GlassPill(title: "Povolit", symbol: "checkmark") {
-                            calendar.requestAccess()
-                        }
-                    }
-                }
-                if calendar.access == .denied {
-                    SettingsDivider()
-                    SettingsRow(title: "Soukromí a zabezpečení",
-                                subtitle: "Přístup ke kalendáři povol v Nastavení systému.") {
-                        GlassPill(title: "Otevřít", symbol: "arrow.up.forward") {
-                            openSystemURL("x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
-                        }
-                    }
-                }
-            }
-
-            SettingsCard(header: "Google Kalendář") {
-                SettingsRow(title: "Internetové účty",
-                            subtitle: "Přidej Google účet v Nastavení systému → Internetové účty a zapni u něj Kalendáře. Události se pak objeví v NotchMax, bez dalšího přihlašování.") {
-                    GlassPill(title: "Otevřít", symbol: "arrow.up.forward") {
-                        openSystemURL("x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension")
-                    }
-                }
-                SettingsDivider()
-                SettingsNote(symbol: "clock",
-                             text: "Přímé přihlášení k Googlu (OAuth) je v plánu jako další krok.")
-            }
-        }
-        .onAppear { calendar.refreshAccess() }
-    }
-
-    private var statusText: String {
-        switch calendar.access {
-        case .granted: return "Povoleno"
-        case .denied: return "Zamítnuto"
-        case .unknown: return "Zatím nepovoleno"
-        }
-    }
-
-    private var statusColor: Color {
-        switch calendar.access {
-        case .granted: return Color.green
-        case .denied: return Color.red
-        case .unknown: return Color.orange
-        }
-    }
-
-    private func openSystemURL(_ string: String) {
-        if let url = URL(string: string) { NSWorkspace.shared.open(url) }
-    }
-}
+// Kalendář: `CalendarSettings` je definováno v samostatném souboru.
 
 // MARK: - Aktualizace
 
