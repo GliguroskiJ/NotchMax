@@ -4,7 +4,7 @@ import SwiftUI
 struct ClaudeAgentsView: View {
     @ObservedObject private var monitor = ClaudeMonitor.shared
 
-    private let cardWidth: CGFloat = 172
+    private let cardWidth: CGFloat = 164
 
     var body: some View {
         VStack(alignment: .leading, spacing: NotchLayout.spacingS) {
@@ -26,14 +26,14 @@ struct ClaudeAgentsView: View {
             CardLabel(symbol: "sparkles", title: "Claude Code")
             Spacer(minLength: 0)
             if monitor.workingCount > 0 {
-                CountChip(count: monitor.workingCount, label: "pracuje", color: .green)
+                CountChip(count: monitor.workingCount, label: L("pracuje"), color: .green)
             }
             if monitor.waitingCount > 0 {
-                CountChip(count: monitor.waitingCount, label: "čeká", color: .orange)
+                CountChip(count: monitor.waitingCount, label: L("čeká"), color: .orange)
             }
             let idleCount = monitor.sessions.count - monitor.activeCount
             if idleCount > 0 {
-                CountChip(count: idleCount, label: "nečinné", color: Color.white.opacity(0.45))
+                CountChip(count: idleCount, label: L("nečinné"), color: Color.white.opacity(0.45))
             }
             Button {
                 monitor.refresh()
@@ -45,7 +45,7 @@ struct ClaudeAgentsView: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .help("Obnovit")
+            .help(L("Obnovit"))
         }
         .padding(.horizontal, 4)
     }
@@ -82,12 +82,12 @@ struct ClaudeAgentsView: View {
             ClaudeSessionCard(session: session)
         }
         .buttonStyle(.plain)
-        .help(session.cwd.isEmpty ? "Otevřít v Terminálu" : "Otevřít \(session.cwd) v Terminálu")
+        .help(session.cwd.isEmpty ? L("Otevřít v Terminálu") : L("Otevřít %@ v Terminálu", session.cwd))
         .contextMenu {
-            Button("Otevřít v Terminálu") { monitor.open(session) }
-            Button("Zobrazit ve Finderu") { monitor.revealInFinder(session) }
+            Button(L("Otevřít v Terminálu")) { monitor.open(session) }
+            Button(L("Zobrazit ve Finderu")) { monitor.revealInFinder(session) }
                 .disabled(session.cwd.isEmpty)
-            Button("Kopírovat příkaz pro obnovení") { monitor.copyResumeCommand(session) }
+            Button(L("Kopírovat příkaz pro obnovení")) { monitor.copyResumeCommand(session) }
         }
     }
 
@@ -96,10 +96,10 @@ struct ClaudeAgentsView: View {
     private var emptyState: some View {
         EmptyState(
             symbol: "sparkles",
-            title: "Spusť Claude Code v terminálu",
+            title: L("Spusť Claude Code v terminálu"),
             message: monitor.hooksInstalled
-                ? "Relace Claude Code z posledních 24 hodin se zobrazí tady."
-                : "Relace z posledních 24 hodin se zobrazí tady. Pro přesnější stav nainstaluj hooky v Nastavení → Agenti."
+                ? L("Relace Claude Code z posledních 24 hodin se zobrazí tady.")
+                : L("Relace z posledních 24 hodin se zobrazí tady. Pro přesnější stav nainstaluj hooky v Nastavení → Agenti.")
         )
         .glassCard(padding: NotchLayout.spacingM)
     }
@@ -189,7 +189,7 @@ private struct ClaudeSessionCard: View {
             }
         }()
         HStack(spacing: 4) {
-            Text(session.state.title)
+            Text(L(session.state.title))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(stateColor)
                 .lineLimit(1)
@@ -273,11 +273,11 @@ private struct CountChip: View {
 enum ClaudeRelativeTime {
     static func string(from date: Date, now: Date = Date()) -> String {
         let seconds = max(0, now.timeIntervalSince(date))
-        if seconds < 60 { return "právě teď" }
+        if seconds < 60 { return L("právě teď") }
         let minutes = Int(seconds / 60)
-        if minutes < 60 { return "před \(minutes) min" }
+        if minutes < 60 { return L("před %d min", minutes) }
         let hours = minutes / 60
-        if hours < 24 { return "před \(hours) h" }
-        return "před \(hours / 24) d"
+        if hours < 24 { return L("před %d h", hours) }
+        return L("před %d d", hours / 24)
     }
 }

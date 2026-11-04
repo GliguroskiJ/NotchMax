@@ -35,11 +35,11 @@ enum AccentChoice: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .cyan: return "Azurová"
-        case .mint: return "Mátová"
-        case .violet: return "Fialová"
-        case .orange: return "Oranžová"
-        case .white: return "Bílá"
+        case .cyan: return L("Azurová")
+        case .mint: return L("Mátová")
+        case .violet: return L("Fialová")
+        case .orange: return L("Oranžová")
+        case .white: return L("Bílá")
         }
     }
 
@@ -67,13 +67,13 @@ enum ActivitySlot: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .auto: return "Automaticky"
-        case .music: return "Hudba"
-        case .timer: return "Časovač"
-        case .meeting: return "Schůzka"
-        case .battery: return "Baterie"
-        case .claude: return "Claude agenti"
-        case .none: return "Nic"
+        case .auto: return L("Automaticky")
+        case .music: return L("Hudba")
+        case .timer: return L("Časovač")
+        case .meeting: return L("Schůzka")
+        case .battery: return L("Baterie")
+        case .claude: return L("Claude agenti")
+        case .none: return L("Nic")
         }
     }
 
@@ -97,8 +97,20 @@ enum DisplayChoice: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .builtIn: return "Displej s notchem"
-        case .primary: return "Hlavní displej"
+        case .builtIn: return L("Displej s notchem")
+        case .primary: return L("Hlavní displej")
+        }
+    }
+}
+
+/// Jazyk rozhraní aplikace.
+enum AppLanguage: String, CaseIterable, Identifiable {
+    case cs, en
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .cs: return "Čeština"
+        case .en: return "English"
         }
     }
 }
@@ -142,11 +154,13 @@ final class AppSettings: ObservableObject {
     @Published var focusOffShortcut: String { didSet { UserDefaults.standard.set(focusOffShortcut, forKey: "focusOffShortcut") } }
     /// Identifikátory kalendářů (EKCalendar.calendarIdentifier), které se nemají zobrazovat.
     @Published var hiddenCalendarIDs: [String] { didSet { UserDefaults.standard.set(hiddenCalendarIDs, forKey: "hiddenCalendarIDs") } }
-    // HUD v notchi (hlasitost, jas, média, sluchátka, soustředění, oznámení) a zrcátko.
+    // HUD v notchi (hlasitost, jas, média, sluchátka, soustředění) a zrcátko.
+    // `hudNotifications` zůstává jen kvůli uloženým hodnotám – funkce oznámení v notchi byla odebrána.
     @Published var hudReplaceSystem: Bool { didSet { UserDefaults.standard.set(hudReplaceSystem, forKey: "hudReplaceSystem") } }
     @Published var hudMedia: Bool { didSet { UserDefaults.standard.set(hudMedia, forKey: "hudMedia") } }
     @Published var hudHeadphones: Bool { didSet { UserDefaults.standard.set(hudHeadphones, forKey: "hudHeadphones") } }
     @Published var hudFocus: Bool { didSet { UserDefaults.standard.set(hudFocus, forKey: "hudFocus") } }
+    @Published var language: AppLanguage { didSet { UserDefaults.standard.set(language.rawValue, forKey: "language") } }
     @Published var hudNotifications: Bool { didSet { UserDefaults.standard.set(hudNotifications, forKey: "hudNotifications") } }
     @Published var hudClaude: Bool { didSet { UserDefaults.standard.set(hudClaude, forKey: "hudClaude") } }
     @Published var mirrorButton: Bool { didSet { UserDefaults.standard.set(mirrorButton, forKey: "mirrorButton") } }
@@ -184,6 +198,7 @@ final class AppSettings: ObservableObject {
             "hudHeadphones": true,
             "hudFocus": true,
             "hudNotifications": false,
+            "language": AppLanguage.cs.rawValue,
             "hudClaude": false,
             "mirrorButton": true,
 
@@ -231,6 +246,7 @@ final class AppSettings: ObservableObject {
         hudHeadphones = d.bool(forKey: "hudHeadphones")
         hudFocus = d.bool(forKey: "hudFocus")
         hudNotifications = d.bool(forKey: "hudNotifications")
+        language = AppLanguage(rawValue: d.string(forKey: "language") ?? "") ?? .cs
         hudClaude = d.bool(forKey: "hudClaude")
         mirrorButton = d.bool(forKey: "mirrorButton")
         hiddenCalendarIDs = d.stringArray(forKey: "hiddenCalendarIDs") ?? []
@@ -272,7 +288,7 @@ final class AppSettings: ObservableObject {
     static let maxVisibleTabs = 5
 
     /// Text vysvětlující, proč nejde zapnout další záložku.
-    static let tabLimitNote = "Maximálně 5 záložek – jinak by se schovaly za notch. Nejdřív jinou vypni."
+    static var tabLimitNote: String { L("Maximálně 5 záložek – jinak by se schovaly za notch. Nejdřív jinou vypni.") }
 
     /// Počet zapnutých volitelných záložek (bez Domů).
     var enabledOptionalTabCount: Int {

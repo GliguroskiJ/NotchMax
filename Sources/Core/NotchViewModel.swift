@@ -18,12 +18,12 @@ enum NotchTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .home: return "Přehled"
-        case .calendar: return "Kalendář"
-        case .shelf: return "Odkladiště"
-        case .tools: return "Nástroje"
-        case .system: return "Systém"
-        case .agents: return "Agenti"
+        case .home: return L("Přehled")
+        case .calendar: return L("Kalendář")
+        case .shelf: return L("Odkladiště")
+        case .tools: return L("Nástroje")
+        case .system: return L("Systém")
+        case .agents: return L("Agenti")
         }
     }
 }

@@ -2,6 +2,20 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.12
+Novinky
+- Angličtina: v Nastavení → Obecné přepneš celou aplikaci do English
+- Test animace AirPods a barva sluchátek podle modelu
+- Diagnostika pro zapínání Nerušit (Nastavení → Časovač a soustředění)
+Úpravy
+- Rozbalený notch je užší, horní lišta je výš se stejnými okraji
+- Odebrán ukazatel baterie z horní lišty (baterie je na domovské stránce)
+- Tlačítka přehrávače a Spustit jsou na lepším místě
+- Živé aktivity jsou zarovnané víc ke krajům
+- Užší animace přepnutí Soustředění
+- Nerušit se zapíná přes systémovou zkratku, Ovládací centrum je jen záloha
+- Odebrána oznámení v notchi
+
 ## 0.1.11
 Úpravy
 - Zavřený notch je čistě černý; po rozbalení svítí podle obalu alba nebo zvolené barvy

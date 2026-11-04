@@ -22,7 +22,7 @@ struct PaneSwitcher<T: Hashable>: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: item.symbol).font(.system(size: 11, weight: .semibold))
-                        Text(item.title).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                        Text(L(item.title)).font(.system(size: 11, weight: .semibold)).lineLimit(1)
                     }
                     .foregroundStyle(active ? Color.white : Color.white.opacity(0.6))
                     .padding(.horizontal, 10)

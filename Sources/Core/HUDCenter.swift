@@ -16,6 +16,29 @@ enum HeadphoneModel: String, Equatable {
     }
 }
 
+/// Barva sluchátek (pokud ji jde zjistit) – HUD podle ní obarví ikonu.
+enum HeadphoneColor: String, Equatable, CaseIterable {
+    case white, black, spaceGray, silver, skyBlue, pink, green, midnight, starlight, orange, purple, blue, red
+
+    var color: Color {
+        switch self {
+        case .white: return Color(white: 0.96)
+        case .black: return Color(white: 0.18)
+        case .spaceGray: return Color(red: 0.42, green: 0.43, blue: 0.45)
+        case .silver: return Color(red: 0.85, green: 0.86, blue: 0.87)
+        case .skyBlue: return Color(red: 0.62, green: 0.75, blue: 0.85)
+        case .pink: return Color(red: 0.95, green: 0.74, blue: 0.75)
+        case .green: return Color(red: 0.70, green: 0.78, blue: 0.64)
+        case .midnight: return Color(red: 0.20, green: 0.23, blue: 0.29)
+        case .starlight: return Color(red: 0.93, green: 0.89, blue: 0.82)
+        case .orange: return Color(red: 0.95, green: 0.62, blue: 0.38)
+        case .purple: return Color(red: 0.72, green: 0.64, blue: 0.85)
+        case .blue: return Color(red: 0.36, green: 0.53, blue: 0.80)
+        case .red: return Color(red: 0.80, green: 0.22, blue: 0.24)
+        }
+    }
+}
+
 enum MediaAction: Equatable { case play, pause, next, previous }
 
 /// Jedna krátká „HUD“ událost zobrazená v notchi (místo systémových OSD a oznámení).
@@ -26,10 +49,9 @@ enum HUDEvent: Equatable {
     case keyboardBrightness(level: Double)
     case media(action: MediaAction, title: String?, artist: String?)
     /// Baterie 0…100, nil = neznámo
-    case headphones(name: String, model: HeadphoneModel, left: Int?, right: Int?, caseLevel: Int?, connected: Bool)
+    case headphones(name: String, model: HeadphoneModel, color: HeadphoneColor?, left: Int?, right: Int?, caseLevel: Int?, connected: Bool)
     case focus(name: String, symbol: String, enabled: Bool)
     case claude(project: String, needsAttention: Bool, message: String?)
-    case notification(appName: String, bundleID: String?, title: String, body: String?)
 
     /// Jak dlouho zůstane HUD vidět (s).
     var duration: TimeInterval {
@@ -39,7 +61,6 @@ enum HUDEvent: Equatable {
         case .headphones: return 4.0
         case .focus: return 2.4
         case .claude: return 4.0
-        case .notification: return 5.0
         }
     }
 
@@ -53,7 +74,6 @@ enum HUDEvent: Equatable {
         case .headphones: return "headphones"
         case .focus: return "focus"
         case .claude: return "claude"
-        case .notification: return "notification"
         }
     }
 }
@@ -87,7 +107,7 @@ final class HUDCenter: ObservableObject {
         // Rychlé HUD přerušilo oznámení / sluchátka / Clauda → vrátit ho do fronty, ať se neztratí.
         if immediate, let cur = current, cur.family != event.family {
             switch cur {
-            case .notification, .headphones, .claude, .focus: queue.insert(cur, at: 0)
+            case .headphones, .claude, .focus: queue.insert(cur, at: 0)
             default: break
             }
         }

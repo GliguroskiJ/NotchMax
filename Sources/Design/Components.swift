@@ -15,12 +15,12 @@ struct EmptyState: View {
                 .foregroundStyle(Color.white.opacity(0.7))
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(Color.white.opacity(0.08)))
-            Text(title)
+            Text(L(title))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.85))
                 .multilineTextAlignment(.center)
             if let message {
-                Text(message)
+                Text(L(message))
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color.white.opacity(0.5))
                     .multilineTextAlignment(.center)
@@ -40,7 +40,7 @@ struct CardLabel: View {
         HStack(spacing: 6) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .semibold))
-            Text(title)
+            Text(L(title))
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

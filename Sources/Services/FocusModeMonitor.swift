@@ -19,8 +19,21 @@ final class FocusModeMonitor: ObservableObject {
 
     /// Název aktivního režimu (nil = vypnuto nebo neznámé).
     @Published private(set) var activeModeName: String?
+    /// Identifikátor aktivního režimu (např. `com.apple.donotdisturb.mode.default`), nil = vypnuto.
+    @Published private(set) var activeModeID: String?
     /// Zda jdou soubory se stavem Soustředění číst (jinak je potřeba Plný přístup k disku).
     @Published private(set) var canRead: Bool = true
+
+    /// „Nerušit“ je aktivní = běží JAKÝKOLI režim Soustředění (Nerušit, Práce, Spánek, vlastní…).
+    /// Pro přepínání (`FocusController`) je to správná sémantika: zkratka / Ovládací centrum
+    /// vypnou aktivní režim a při zapnutí nemá smysl zapínat Nerušit přes jiný běžící režim.
+    /// Platí jen když `canRead == true` (jinak false).
+    var isDoNotDisturbActive: Bool { canRead && activeModeID != nil }
+
+    /// Aktivní je přímo vestavěný režim „Nerušit“ (`com.apple.donotdisturb.mode.default`).
+    var isDefaultDoNotDisturbActive: Bool {
+        canRead && (activeModeID?.lowercased().contains("donotdisturb.mode.default") ?? false)
+    }
 
     private var watcher: FocusFileWatcher?
     private var observer: NSObjectProtocol?
@@ -50,12 +63,18 @@ final class FocusModeMonitor: ObservableObject {
         w.start()
     }
 
+    /// Vynutí brzké znovunačtení stavu (např. po přepnutí z NotchMaxu).
+    func refresh() {
+        watcher?.poke()
+    }
+
     private func apply(_ snapshot: FocusSnapshot) {
         if canRead != snapshot.canRead { canRead = snapshot.canRead }
         guard snapshot.canRead else { return }
 
         let newName: String? = snapshot.modeID == nil ? nil : snapshot.name
         if activeModeName != newName { activeModeName = newName }
+        if activeModeID != snapshot.modeID { activeModeID = snapshot.modeID }
 
         guard let previous = last else {
             // Výchozí stav při startu (nebo po udělení přístupu) – bez HUD.
@@ -69,13 +88,13 @@ final class FocusModeMonitor: ObservableObject {
 
         if snapshot.modeID != nil {
             HUDCenter.shared.show(.focus(
-                name: snapshot.name ?? "Soustředění",
+                name: snapshot.name ?? L("Soustředění"),
                 symbol: snapshot.symbol ?? "moon.fill",
                 enabled: true
             ))
         } else {
             HUDCenter.shared.show(.focus(
-                name: previous.name ?? "Soustředění",
+                name: previous.name ?? L("Soustředění"),
                 symbol: previous.symbol ?? "moon.fill",
                 enabled: false
             ))
@@ -274,17 +293,17 @@ final class FocusFileWatcher: @unchecked Sendable {
     private static func defaultInfo(for modeID: String) -> (name: String, symbol: String, builtIn: Bool) {
         let id = modeID.lowercased()
         if id == "com.apple.donotdisturb.mode.default" || id.hasSuffix("mode.default") {
-            return ("Nerušit", "moon.fill", true)
+            return (L("Nerušit"), "moon.fill", true)
         }
         if id.contains("reduce-interruptions") || id.contains("reduceinterruptions") {
-            return ("Omezit vyrušování", "sparkles", true)
+            return (L("Omezit vyrušování"), "sparkles", true)
         }
         if id.hasPrefix("com.apple.") {
-            if id.contains("work") { return ("Práce", "briefcase.fill", true) }
-            if id.contains("personal") { return ("Osobní", "person.fill", true) }
-            if id.contains("sleep") { return ("Spánek", "bed.double.fill", true) }
-            if id.contains("driving") { return ("Řízení", "car.fill", true) }
+            if id.contains("work") { return (L("Práce"), "briefcase.fill", true) }
+            if id.contains("personal") { return (L("Osobní"), "person.fill", true) }
+            if id.contains("sleep") { return (L("Spánek"), "bed.double.fill", true) }
+            if id.contains("driving") { return (L("Řízení"), "car.fill", true) }
         }
-        return ("Soustředění", "moon.fill", false)
+        return (L("Soustředění"), "moon.fill", false)
     }
 }

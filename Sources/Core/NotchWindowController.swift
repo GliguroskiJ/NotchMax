@@ -13,8 +13,6 @@ final class NotchWindowController {
     private var closeTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private var dragStartCount = 0
-    /// Zobrazené oznámení v HUD je klikací, takže zavřený panel musí přijímat myš.
-    private var hudAcceptsMouse = false
     private let spring = Animation.spring(response: 0.42, dampingFraction: 0.78)
 
     /// Selže (nil), pokud právě není připojen žádný displej.
@@ -94,10 +92,6 @@ final class NotchWindowController {
             .sink { [weak self] _ in self?.vm.runChargeAnimation() }
             .store(in: &cancellables)
 
-        HUDCenter.shared.$current
-            .sink { [weak self] event in self?.updateHUDMouse(event) }
-            .store(in: &cancellables)
-
         services.battery.onPlugIn = { [weak self] in
             guard let self, self.services.settings.chargingAnimation else { return }
             self.vm.runChargeAnimation()
@@ -112,18 +106,6 @@ final class NotchWindowController {
             NSRect(x: f.midX - size.width / 2, y: f.maxY - size.height + CGFloat(value), width: size.width, height: size.height),
             display: true
         )
-    }
-
-    /// `@Published` emituje před zápisem hodnoty, proto se nová událost předává explicitně.
-    private func updateHUDMouse(_ event: HUDEvent?) {
-        if case .some(.notification) = event {
-            hudAcceptsMouse = true
-        } else {
-            hudAcceptsMouse = false
-        }
-        if !vm.isOpen {
-            panel.ignoresMouseEvents = !hudAcceptsMouse
-        }
     }
 
     // MARK: - Globální zkratka
@@ -286,7 +268,7 @@ final class NotchWindowController {
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 450_000_000)
             guard let self, !self.vm.isOpen else { return }
-            self.panel.ignoresMouseEvents = !self.hudAcceptsMouse
+            self.panel.ignoresMouseEvents = true
         }
     }
 }

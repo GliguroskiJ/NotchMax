@@ -3,24 +3,22 @@ import AppKit
 import AVFoundation
 import EventKit
 import CoreBluetooth
-import UserNotifications
 
 // MARK: - Oprávnění: model
 
 /// Systémová oprávnění, která NotchMax používá.
 enum PermissionKind: String, CaseIterable, Identifiable {
-    case accessibility, fullDiskAccess, calendar, camera, bluetooth, notifications
+    case accessibility, fullDiskAccess, calendar, camera, bluetooth
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .accessibility: return "Zpřístupnění"
-        case .fullDiskAccess: return "Plný přístup k disku"
-        case .calendar: return "Kalendář"
-        case .camera: return "Kamera"
-        case .bluetooth: return "Bluetooth"
-        case .notifications: return "Oznámení"
+        case .accessibility: return L("Zpřístupnění")
+        case .fullDiskAccess: return L("Plný přístup k disku")
+        case .calendar: return L("Kalendář")
+        case .camera: return L("Kamera")
+        case .bluetooth: return L("Bluetooth")
         }
     }
 
@@ -31,7 +29,6 @@ enum PermissionKind: String, CaseIterable, Identifiable {
         case .calendar: return "calendar"
         case .camera: return "camera.fill"
         case .bluetooth: return "dot.radiowaves.left.and.right"
-        case .notifications: return "bell.fill"
         }
     }
 
@@ -39,17 +36,15 @@ enum PermissionKind: String, CaseIterable, Identifiable {
     var purpose: String {
         switch self {
         case .accessibility:
-            return "HUD hlasitosti a jasu v notchi a přepínání Nerušit s časovačem."
+            return L("HUD hlasitosti a jasu v notchi a přepínání Nerušit s časovačem.")
         case .fullDiskAccess:
-            return "Oznámení v notchi a zobrazení přepnutí Soustředění. Nedá se vyžádat dialogem – v seznamu zapni NotchMax, a když tam není, přidej ho tlačítkem (+)."
+            return L("Rozpoznání zapnutí a vypnutí režimu Soustředění (animace v notchi). Nedá se vyžádat dialogem – v seznamu zapni NotchMax, a když tam není, přidej ho tlačítkem (+).")
         case .calendar:
-            return "Nadcházející události v notchi a v záložce Kalendář."
+            return L("Nadcházející události v notchi a v záložce Kalendář.")
         case .camera:
-            return "Zrcátko – náhled z kamery v notchi."
+            return L("Zrcátko – náhled z kamery v notchi.")
         case .bluetooth:
-            return "Animace při připojení AirPods a sluchátek."
-        case .notifications:
-            return "Systémová upozornění od samotného NotchMaxu. Pro zobrazování oznámení v notchi potřeba není."
+            return L("Animace při připojení AirPods a sluchátek.")
         }
     }
 
@@ -62,7 +57,6 @@ enum PermissionKind: String, CaseIterable, Identifiable {
         case .calendar: SystemSettingsLink.open(.calendars)
         case .camera: SystemSettingsLink.open(.camera)
         case .bluetooth: SystemSettingsLink.open(.bluetooth)
-        case .notifications: SystemSettingsLink.open(.notifications)
         }
     }
 }
@@ -73,11 +67,11 @@ enum PermissionState: Equatable {
 
     var title: String {
         switch self {
-        case .granted: return "Povoleno"
-        case .partial: return "Jen částečně"
-        case .missing: return "Chybí"
-        case .notDetermined: return "Nevyžádáno"
-        case .unknown: return "Zjišťuji…"
+        case .granted: return L("Povoleno")
+        case .partial: return L("Jen částečně")
+        case .missing: return L("Chybí")
+        case .notDetermined: return L("Nevyžádáno")
+        case .unknown: return L("Zjišťuji…")
         }
     }
 
@@ -122,11 +116,10 @@ final class PermissionCenter: ObservableObject {
         let s = AppSettings.shared
         switch kind {
         case .accessibility: return s.hudReplaceSystem || s.focusWithTimer
-        case .fullDiskAccess: return s.hudNotifications || s.hudFocus
+        case .fullDiskAccess: return s.hudFocus
         case .calendar: return s.liveCalendar || s.tabCalendar
         case .camera: return s.mirrorButton
         case .bluetooth: return s.hudHeadphones
-        case .notifications: return false
         }
     }
 
@@ -141,29 +134,11 @@ final class PermissionCenter: ObservableObject {
     func refresh() {
         var next = states
         next[.accessibility] = MediaKeyInterceptor.shared.isTrusted ? .granted : .missing
-        next[.fullDiskAccess] = NotificationMirror.shared.hasFullDiskAccess ? .granted : .missing
+        next[.fullDiskAccess] = FullDiskAccess.isGranted ? .granted : .missing
         next[.calendar] = Self.calendarState()
         next[.camera] = Self.cameraState()
         next[.bluetooth] = Self.bluetoothState()
         if next != states { states = next }
-
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let status = settings.authorizationStatus
-            Task { @MainActor in
-                PermissionCenter.shared.applyNotificationStatus(status)
-            }
-        }
-    }
-
-    private func applyNotificationStatus(_ status: UNAuthorizationStatus) {
-        let value: PermissionState
-        switch status {
-        case .authorized, .provisional: value = .granted
-        case .notDetermined: value = .notDetermined
-        case .denied: value = .missing
-        @unknown default: value = .unknown
-        }
-        if states[.notifications] != value { states[.notifications] = value }
     }
 
     /// Jde oprávnění vyžádat systémovým dialogem?
@@ -171,7 +146,7 @@ final class PermissionCenter: ObservableObject {
         switch kind {
         case .accessibility: return state(kind) != .granted
         case .fullDiskAccess: return false
-        case .calendar, .camera, .bluetooth, .notifications: return state(kind) == .notDetermined
+        case .calendar, .camera, .bluetooth: return state(kind) == .notDetermined
         }
     }
 
@@ -203,16 +178,6 @@ final class PermissionCenter: ObservableObject {
                 let probe = BluetoothPermissionProbe()
                 bluetoothProbe = probe
                 bluetoothManager = CBCentralManager(delegate: probe, queue: nil)
-            } else {
-                kind.openSystemSettings()
-            }
-        case .notifications:
-            if state(kind) == .notDetermined {
-                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in
-                    Task { @MainActor in
-                        PermissionCenter.shared.refresh()
-                    }
-                }
             } else {
                 kind.openSystemSettings()
             }
@@ -302,7 +267,7 @@ struct PermissionRow: View {
 
     private var subtitle: String {
         if kind == .calendar && state == .partial {
-            return "Povolen je jen zápis – NotchMax potřebuje plný přístup ke kalendářům."
+            return L("Povolen je jen zápis – NotchMax potřebuje plný přístup ke kalendářům.")
         }
         return kind.purpose
     }
@@ -327,7 +292,7 @@ struct PermissionRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(compact ? "Oprávnění: \(kind.title)" : kind.title)
+                        Text(compact ? L("Oprávnění: %@", kind.title) : kind.title)
                             .font(.system(size: 14.5))
                             .foregroundStyle(Color.white)
                         Text(subtitle)
@@ -343,24 +308,24 @@ struct PermissionRow: View {
                 if showsButtons {
                     SettingsButtonRow {
                         if center.canPrompt(kind) {
-                            GlassPill(title: "Povolit", symbol: "hand.raised.fill",
+                            GlassPill(title: L("Povolit"), symbol: "hand.raised.fill",
                                       tint: settings.accent.color.opacity(0.35)) {
                                 center.request(kind)
                             }
                             .fixedSize()
                         }
-                        GlassPill(title: "Otevřít Nastavení", symbol: "arrow.up.forward.app") {
+                        GlassPill(title: L("Otevřít Nastavení"), symbol: "arrow.up.forward.app") {
                             kind.openSystemSettings()
                         }
                         .fixedSize()
                         if (kind == .fullDiskAccess || kind == .accessibility) && state != .granted {
-                            GlassPill(title: "Ukázat ve Finderu", symbol: "folder") {
+                            GlassPill(title: L("Ukázat ve Finderu"), symbol: "folder") {
                                 center.revealAppInFinder()
                             }
                             .fixedSize()
                         }
                         if compact {
-                            GlassPill(title: "Všechna oprávnění", symbol: "lock.shield") {
+                            GlassPill(title: L("Všechna oprávnění"), symbol: "lock.shield") {
                                 showSettingsSection(.permissions)
                             }
                             .fixedSize()
@@ -384,30 +349,31 @@ struct PermissionsSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Přehled") {
+            SettingsCard(header: L("Přehled")) {
                 ForEach(Array(PermissionKind.allCases.enumerated()), id: \.element) { index, kind in
                     if index > 0 { SettingsDivider() }
                     PermissionRow(kind: kind)
                 }
             }
 
-            SettingsCard(header: "Když oprávnění nefunguje") {
+            SettingsCard(header: L("Když oprávnění nefunguje")) {
                 SettingsNote(symbol: "exclamationmark.triangle",
-                             text: "Přepínač v Nastavení systému je zapnutý, ale tady svítí „Chybí“? Vyber NotchMax v seznamu, odeber ho tlačítkem (−) a přidej znovu tlačítkem (+) – nebo ho do seznamu přetáhni z Finderu. Potom NotchMax restartuj.")
+                             text: L("Přepínač v Nastavení systému je zapnutý, ale tady svítí „Chybí“? Vyber NotchMax v seznamu, odeber ho tlačítkem (−) a přidej znovu tlačítkem (+) – nebo ho do seznamu přetáhni z Finderu. Potom NotchMax restartuj."))
                 SettingsDivider()
                 SettingsNote(symbol: "signature",
-                             text: "Po každé aktualizaci nepodepsaného sestavení může macOS udělená oprávnění zapomenout, protože aplikaci pozná podle podpisu. Trvalé řešení je stabilní podpisový certifikát – viz README a skript scripts/create-signing-cert.sh.")
+                             text: L("Po každé aktualizaci nepodepsaného sestavení může macOS udělená oprávnění zapomenout, protože aplikaci pozná podle podpisu. Trvalé řešení je stabilní podpisový certifikát – viz README a skript scripts/create-signing-cert.sh."))
                 SettingsDivider()
-                SettingsActionRow(title: "Akce") {
-                    GlassPill(title: "Zkontrolovat znovu", symbol: "arrow.clockwise") {
+                SettingsActionRow(title: L("Akce")) {
+                    GlassPill(title: L("Zkontrolovat znovu"), symbol: "arrow.clockwise") {
+                        FullDiskAccess.invalidateCache()
                         center.refresh()
                     }
                     .fixedSize()
-                    GlassPill(title: "Ukázat NotchMax ve Finderu", symbol: "folder") {
+                    GlassPill(title: L("Ukázat NotchMax ve Finderu"), symbol: "folder") {
                         center.revealAppInFinder()
                     }
                     .fixedSize()
-                    GlassPill(title: "Ukončit NotchMax", symbol: "power") {
+                    GlassPill(title: L("Ukončit NotchMax"), symbol: "power") {
                         NSApp.terminate(nil)
                     }
                     .fixedSize()
@@ -430,9 +396,9 @@ struct HUDSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "HUD hlasitosti a jasu") {
-                SettingsToggleRow(title: "Nahradit systémové HUD",
-                                  subtitle: "Hlasitost, jas displeje a podsvícení klávesnice se zobrazí v notchi místo uprostřed obrazovky.",
+            SettingsCard(header: L("HUD hlasitosti a jasu")) {
+                SettingsToggleRow(title: L("Nahradit systémové HUD"),
+                                  subtitle: L("Hlasitost, jas displeje a podsvícení klávesnice se zobrazí v notchi místo uprostřed obrazovky."),
                                   isOn: $settings.hudReplaceSystem)
                 if settings.hudReplaceSystem {
                     SettingsDivider()
@@ -440,98 +406,38 @@ struct HUDSettingsSection: View {
                 }
             }
 
-            SettingsCard(header: "Animace v notchi") {
-                SettingsToggleRow(title: "Přehrávání médií",
-                                  subtitle: "Krátká animace při play, pauze, další a předchozí skladbě.",
+            SettingsCard(header: L("Animace v notchi")) {
+                SettingsToggleRow(title: L("Přehrávání médií"),
+                                  subtitle: L("Krátká animace při play, pauze, další a předchozí skladbě."),
                                   isOn: $settings.hudMedia)
                 SettingsDivider()
-                SettingsToggleRow(title: "AirPods a sluchátka",
-                                  subtitle: "Animace při připojení s ukazatelem baterie.",
+                SettingsToggleRow(title: L("AirPods a sluchátka"),
+                                  subtitle: L("Animace při připojení s ukazatelem baterie."),
                                   isOn: $settings.hudHeadphones)
                 if settings.hudHeadphones && center.state(.bluetooth) == .missing {
                     SettingsDivider()
                     PermissionRow(kind: .bluetooth, compact: true)
                 }
                 SettingsDivider()
-                SettingsToggleRow(title: "Soustředění",
-                                  subtitle: "Ukáže v notchi, když zapneš nebo vypneš režim soustředění.",
+                SettingsRow(title: L("Vyzkoušet animaci sluchátek"),
+                            subtitle: L("Ukáže HUD právě připojených sluchátek (model, barva, baterie), nebo ukázku, když žádná připojená nejsou.")) {
+                    GlassPill(title: L("Vyzkoušet animaci"), symbol: "airpodspro") {
+                        HeadphonesMonitor.shared.showTestAnimation()
+                    }
+                    .fixedSize()
+                }
+                SettingsDivider()
+                SettingsToggleRow(title: L("Soustředění"),
+                                  subtitle: L("Ukáže v notchi, když zapneš nebo vypneš režim soustředění."),
                                   isOn: $settings.hudFocus)
                 if settings.hudFocus && !focusMonitor.canRead {
                     SettingsDivider()
                     PermissionRow(kind: .fullDiskAccess, compact: true)
                 }
                 SettingsDivider()
-                SettingsToggleRow(title: "Claude agenti – hotovo / čeká na tebe",
-                                  subtitle: "Upozorní v notchi, když agent dokončí práci nebo potřebuje tvoje rozhodnutí.",
+                SettingsToggleRow(title: L("Claude agenti – hotovo / čeká na tebe"),
+                                  subtitle: L("Upozorní v notchi, když agent dokončí práci nebo potřebuje tvoje rozhodnutí."),
                                   isOn: $settings.hudClaude)
-            }
-        }
-    }
-}
-
-// MARK: - Sekce „Oznámení“
-
-struct NotificationSettingsSection: View {
-    @EnvironmentObject private var settings: AppSettings
-    @ObservedObject private var mirror = NotificationMirror.shared
-
-    init() {}
-
-    private var statusBadge: PermissionStatusBadge {
-        switch mirror.status {
-        case .disabled: return PermissionStatusBadge(text: "Vypnuto", color: Color.white.opacity(0.4))
-        case .needsFullDiskAccess: return PermissionStatusBadge(text: "Chybí přístup", color: .orange)
-        case .running: return PermissionStatusBadge(text: "Běží", color: .green)
-        case .unsupported: return PermissionStatusBadge(text: "Nedostupné", color: .orange)
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Oznámení v notchi (experimentální)") {
-                SettingsToggleRow(title: "Zobrazovat oznámení v notchi",
-                                  subtitle: "Nová oznámení z aplikací se ukážou jako krátká animace v notchi.",
-                                  isOn: $settings.hudNotifications)
-                SettingsDivider()
-                SettingsRow(title: "Stav", subtitle: mirror.status.description) {
-                    statusBadge
-                }
-                SettingsDivider()
-                PermissionRow(kind: .fullDiskAccess, compact: true)
-            }
-
-            SettingsCard(header: "Vyzkoušet") {
-                SettingsActionRow(title: "Test oznámení",
-                                  subtitle: "Testovací oznámení projde celou cestou přes Centrum oznámení; náhled jen ukáže, jak oznámení v notchi vypadá.") {
-                    GlassPill(title: "Poslat testovací oznámení", symbol: "paperplane.fill",
-                              tint: settings.accent.color.opacity(0.35)) {
-                        mirror.sendTestNotification()
-                    }
-                    .fixedSize()
-                    GlassPill(title: "Ukázat náhled", symbol: "eye") {
-                        mirror.previewNotificationHUD()
-                    }
-                    .fixedSize()
-                }
-                if let result = mirror.lastTestResult, !result.isEmpty {
-                    SettingsDivider()
-                    SettingsNote(symbol: "text.bubble", text: result)
-                }
-            }
-
-            SettingsCard(header: "Jak to nastavit") {
-                SettingsNote(symbol: "list.number",
-                             text: "1) Povol NotchMaxu plný přístup k disku (sekce Oprávnění).\n2) V Nastavení systému → Oznámení nastav u vybraných aplikací styl upozornění „Žádné“. Zprávy pak chodí jen do notche a v Centru oznámení zůstanou.\n3) Zapni přepínač výše.")
-                SettingsDivider()
-                SettingsActionRow(title: "Nastavení oznámení v macOS") {
-                    GlassPill(title: "Otevřít Oznámení", symbol: "bell") {
-                        SystemSettingsLink.open(.notifications)
-                    }
-                    .fixedSize()
-                }
-                SettingsDivider()
-                SettingsNote(symbol: "exclamationmark.triangle",
-                             text: "macOS neumožňuje systémové bannery automaticky vypnout ani plně nahradit. NotchMax oznámení jen čte z databáze Centra oznámení, takže se mohou objevit s malým zpožděním a bez akcí (odpovědět, označit apod.). Pokud styl upozornění nezměníš, uvidíš oznámení dvakrát.")
             }
         }
     }

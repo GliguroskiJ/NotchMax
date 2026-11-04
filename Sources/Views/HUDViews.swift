@@ -29,12 +29,11 @@ struct HUDLayout: Equatable {
         case .headphones:
             return HUDLayout(side: 64, extraHeight: 62)
         case .focus:
-            return HUDLayout(side: 92, extraHeight: 0)
+            // Kompaktní: malá ikona vlevo, krátký název vpravo.
+            return HUDLayout(side: 72, extraHeight: 0)
         case .claude(_, _, let message):
             let hasMessage: Bool = !(message ?? "").isEmpty
             return HUDLayout(side: 108, extraHeight: hasMessage ? 26 : 0)
-        case .notification:
-            return HUDLayout(side: 76, extraHeight: 78)
         }
     }
 }
@@ -125,17 +124,14 @@ struct HUDView: View {
         case .media(let action, _, _):
             // Bez textu – jen obal alba a symbol (titulek by přetékal).
             HUDMediaView(action: action, revision: revision, metrics: metrics, accent: accent)
-        case .headphones(let name, let model, let left, let right, let caseLevel, let connected):
-            HUDHeadphonesView(name: name, model: model, left: left, right: right, caseLevel: caseLevel,
-                              connected: connected, revision: revision, metrics: metrics)
+        case .headphones(let name, let model, let color, let left, let right, let caseLevel, let connected):
+            HUDHeadphonesView(name: name, model: model, color: color, left: left, right: right,
+                              caseLevel: caseLevel, connected: connected, revision: revision, metrics: metrics)
         case .focus(let name, let symbol, let enabled):
             HUDFocusView(name: name, symbol: symbol, enabled: enabled, revision: revision, metrics: metrics)
         case .claude(let project, let needsAttention, let message):
             HUDClaudeView(project: project, needsAttention: needsAttention, message: message,
                           revision: revision, metrics: metrics)
-        case .notification(let appName, let bundleID, let title, let text):
-            HUDNotificationView(appName: appName, bundleID: bundleID, title: title, text: text,
-                                revision: revision, metrics: metrics)
         }
     }
 }
@@ -550,9 +546,24 @@ struct HUDMarquee: View {
 
 // MARK: - Sluchátka
 
+/// Hezký název modelu sluchátek (nil = obecná sluchátka → použije se název zařízení).
+private extension HeadphoneModel {
+    var displayName: String? {
+        switch self {
+        case .airpods: return "AirPods"
+        case .airpods3: return "AirPods 3"
+        case .airpodsPro: return "AirPods Pro"
+        case .airpodsMax: return "AirPods Max"
+        case .beats: return "Beats"
+        case .generic: return nil
+        }
+    }
+}
+
 struct HUDHeadphonesView: View {
     let name: String
     let model: HeadphoneModel
+    let color: HeadphoneColor?
     let left: Int?
     let right: Int?
     let caseLevel: Int?
@@ -563,6 +574,24 @@ struct HUDHeadphonesView: View {
     @State private var spin: Double = 0
 
     private var minBudLevel: Int? { [left, right].compactMap { $0 }.min() }
+
+    /// Hlavní řádek: název modelu („AirPods Pro“), u obecných sluchátek název zařízení.
+    private var title: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let pretty = model.displayName { return pretty }
+        return trimmed.isEmpty ? L("Sluchátka") : trimmed
+    }
+
+    /// Barva ikony podle barvy sluchátek (neznámá = bílá).
+    private var symbolColor: Color { color?.color ?? Color.white }
+
+    /// Tmavá sluchátka by na černém pozadí zanikla → jemná světlá záře.
+    private var needsGlow: Bool {
+        switch color {
+        case .some(.black), .some(.spaceGray), .some(.midnight), .some(.blue), .some(.red): return true
+        default: return false
+        }
+    }
 
     var body: some View {
         HUDScaffold(metrics: metrics) {
@@ -583,12 +612,12 @@ struct HUDHeadphonesView: View {
             HStack(spacing: 10) {
                 symbolView
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(name)
+                    Text(title)
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Text(connected ? "Připojeno" : "Odpojeno")
+                    Text(connected ? L("Připojeno") : L("Odpojeno"))
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(connected ? Color.green : Color.white.opacity(0.55))
                         .lineLimit(1)
@@ -599,10 +628,10 @@ struct HUDHeadphonesView: View {
                         HUDBatteryRing(level: left, label: "L", revision: revision)
                     }
                     if let right {
-                        HUDBatteryRing(level: right, label: "P", revision: revision)
+                        HUDBatteryRing(level: right, label: L("P"), revision: revision)
                     }
                     if let caseLevel {
-                        HUDBatteryRing(level: caseLevel, label: "Pouzdro", revision: revision)
+                        HUDBatteryRing(level: caseLevel, label: L("Pouzdro"), revision: revision)
                     }
                 }
                 .opacity(connected ? 1 : 0.45)
@@ -618,7 +647,8 @@ struct HUDHeadphonesView: View {
             let float: CGFloat = reduceMotion ? 0 : CGFloat(sin(t * 2 * Double.pi / 2.6)) * 2
             Image(systemName: hudSymbol(model.symbol, fallback: "headphones"))
                 .font(.system(size: 30, weight: .regular))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(symbolColor)
+                .shadow(color: needsGlow ? Color.white.opacity(0.35) : Color.clear, radius: 3)
                 .offset(y: float)
         }
         .rotation3DEffect(.degrees(spin), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
@@ -704,17 +734,14 @@ struct HUDFocusView: View {
         HUDScaffold(metrics: metrics) {
             badge
         } right: {
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(name)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Text(enabled ? "Zapnuto" : "Vypnuto")
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(enabled ? tint : Color.white.opacity(0.55))
-                    .lineLimit(1)
-            }
+            // Jen krátký název; stav (zapnuto / vypnuto) ukazuje barva ikony i textu.
+            Text(name)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(enabled ? Color.white : Color.white.opacity(0.5))
+                .strikethrough(!enabled, color: Color.white.opacity(0.5))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .truncationMode(.tail)
         } bottom: {
             EmptyView()
         }
@@ -723,7 +750,7 @@ struct HUDFocusView: View {
     }
 
     private var badge: some View {
-        let d: CGFloat = max(min(metrics.topHeight - 8, 26), 18)
+        let d: CGFloat = max(min(metrics.topHeight - 10, 22), 16)
         return ZStack {
             Circle()
                 .stroke(tint, lineWidth: 1.5)
@@ -782,7 +809,7 @@ struct HUDClaudeView: View {
             HStack(spacing: 4) {
                 Image(systemName: needsAttention ? "exclamationmark.bubble.fill" : "checkmark.circle.fill")
                     .font(.system(size: 10, weight: .bold))
-                Text(needsAttention ? "Čeká na tebe" : "Hotovo")
+                Text(needsAttention ? L("Čeká na tebe") : L("Hotovo"))
                     .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .fixedSize()
@@ -822,120 +849,6 @@ struct HUDShimmerSparkles: View {
                                                        endPoint: UnitPoint(x: x0 + 1, y: 0.8)))
                 )
                 .symbolEffect(.bounce, value: reduceMotion ? 0 : revision)
-        }
-    }
-}
-
-// MARK: - Oznámení
-
-struct HUDNotificationView: View {
-    let appName: String
-    let bundleID: String?
-    let title: String
-    let text: String?
-    let revision: Int
-    let metrics: HUDMetrics
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovering = false
-    @State private var rise: CGFloat = 0
-
-    private var appURL: URL? {
-        guard let id = bundleID, !id.isEmpty else { return nil }
-        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
-    }
-
-    var body: some View {
-        let url = appURL
-        let cardShape = RoundedRectangle(cornerRadius: 15, style: .continuous)
-        HUDScaffold(metrics: metrics, bottomInset: 7) {
-            HStack(spacing: 5) {
-                appIcon(url, size: 14)
-                Text(appName)
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.8))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-        } right: {
-            Text("teď")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.5))
-                .lineLimit(1)
-                .fixedSize()
-        } bottom: {
-            HStack(alignment: .center, spacing: 10) {
-                appIcon(url, size: 34)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if let text, !text.isEmpty {
-                        Text(text)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.72))
-                            .lineLimit(2)
-                            .truncationMode(.tail)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .modifier(CardGlass(shape: cardShape))
-            .overlay(
-                cardShape
-                    .fill(Color.white.opacity(hovering ? 0.06 : 0))
-                    .allowsHitTesting(false)
-            )
-            .contentShape(cardShape)
-            .scaleEffect(hovering ? 1.015 : 1)
-            .offset(y: rise)
-            .animation(.smooth(duration: 0.15), value: hovering)
-            .onHover { hovering = $0 }
-            .onTapGesture { openApp(url) }
-            .help("Otevřít \(appName)")
-        }
-        .onAppear { runRise() }
-        .onChange(of: revision) { _, _ in runRise() }
-    }
-
-    @ViewBuilder
-    private func appIcon(_ url: URL?, size: CGFloat) -> some View {
-        if let url {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: size, height: size)
-        } else {
-            Image(systemName: "bell.fill")
-                .font(.system(size: size * 0.5, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .frame(width: size, height: size)
-                .background(
-                    RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                        .fill(LinearGradient(colors: [Color.orange, Color.red],
-                                             startPoint: .top, endPoint: .bottom))
-                )
-        }
-    }
-
-    private func openApp(_ url: URL?) {
-        HUDCenter.shared.dismiss()
-        if let url {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func runRise() {
-        guard !reduceMotion else { return }
-        hudRestart {
-            rise = 10
-        } animate: {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { rise = 0 }
         }
     }
 }

@@ -7,10 +7,17 @@ struct ToolsView: View {
     @EnvironmentObject private var settings: AppSettings
     @ObservedObject private var focus = FocusController.shared
     @State private var selectedMinutes: Int = 30
+    /// Kdy se naposledy objevila chyba Soustředění (zastaralé chyby se nezobrazují).
+    @State private var focusErrorAt: Date?
 
     private let presets: [Int] = [5, 15, 30, 45, 60, 90, 120, 180]
     private let presetColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
     private let permissionTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+    /// Šířka pravého sloupce (užší panel ~534 pt).
+    private let sideColumnWidth: CGFloat = 158
+    private let ringSize: CGFloat = 100
+    /// Jak dlouho po chybě (když časovač neběží) ji ještě ukazovat.
+    private let errorLifetime: TimeInterval = 20
 
     var body: some View {
         HStack(spacing: NotchLayout.spacingM) {
@@ -19,7 +26,7 @@ struct ToolsView: View {
                 focusCard
                 awakeCard
             }
-            .frame(width: NotchLayout.columnWidth)
+            .frame(width: sideColumnWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -27,7 +34,25 @@ struct ToolsView: View {
         }
         .onReceive(permissionTimer) { _ in
             if settings.focusWithTimer { focus.refreshPermission() }
+            // Po vypršení chybu skrýt (vynutí překreslení).
+            if let at = focusErrorAt, Date().timeIntervalSince(at) >= errorLifetime {
+                focusErrorAt = nil
+            }
         }
+        .onChange(of: timer.focusError) { _, newValue in
+            focusErrorAt = newValue == nil ? nil : Date()
+        }
+    }
+
+    /// Chyba Soustředění, která se má zobrazit: jen čerstvá (nebo z právě běžícího časovače,
+    /// protože start časovače chybu nuluje). Stará chyba z dřívějška se ignoruje.
+    private var visibleFocusError: String? {
+        guard let error = timer.focusError else { return nil }
+        if timer.isRunning { return error }
+        if let at = focusErrorAt, Date().timeIntervalSince(at) < errorLifetime {
+            return error
+        }
+        return nil
     }
 
     // MARK: - Časovač
@@ -35,12 +60,12 @@ struct ToolsView: View {
     private var timerCard: some View {
         HStack(alignment: .center, spacing: NotchLayout.spacingM) {
             ring
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: NotchLayout.spacingS) {
                 HStack(spacing: NotchLayout.spacingS) {
-                    CardLabel(symbol: "timer", title: "Focus časovač")
+                    CardLabel(symbol: "timer", title: L("Focus časovač"))
                     Spacer(minLength: 0)
                     if timer.isRunning, let end = timer.endTime {
-                        Text("Konec v \(end.formatted(date: .omitted, time: .shortened))")
+                        Text(L("Konec v %@", end.formatted(date: .omitted, time: .shortened)))
                             .font(.system(size: 10))
                             .foregroundStyle(Color.white.opacity(0.5))
                             .lineLimit(1)
@@ -49,38 +74,43 @@ struct ToolsView: View {
                 presetGrid
                     .opacity(timer.isRunning ? 0.4 : 1)
                     .disabled(timer.isRunning)
-                HStack(spacing: NotchLayout.spacingS) {
-                    if timer.isRunning {
-                        GlassPill(title: "Zastavit", symbol: "stop.fill", tint: Color.red.opacity(0.35)) {
-                            timer.stop()
-                        }
-                        .help("Zastavit časovač")
-                    } else {
-                        GlassPill(title: "Spustit", symbol: "play.fill", tint: settings.accent.color.opacity(0.45)) {
-                            timer.start(minutes: selectedMinutes)
-                        }
-                        .help("Spustit časovač na \(selectedMinutes) min")
+                // Tlačítko přímo pod mřížkou, vodorovně vystředěné vůči mřížce.
+                startStopButton
+                    .frame(maxWidth: .infinity, alignment: .center)
+                if let error = visibleFocusError {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(error)
+                            .font(.system(size: 10))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-                    if let error = timer.focusError {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                            Text(error)
-                                .font(.system(size: 10))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                        .foregroundStyle(Color.orange.opacity(0.9))
-                        .help(error)
-                    }
-                    Spacer(minLength: 0)
+                    .foregroundStyle(Color.orange.opacity(0.9))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .help(error)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
         .glassCard(padding: NotchLayout.spacingM)
         .animation(.smooth(duration: 0.3), value: timer.isRunning)
-        .animation(.smooth(duration: 0.3), value: timer.focusError)
+        .animation(.smooth(duration: 0.3), value: visibleFocusError)
+    }
+
+    @ViewBuilder
+    private var startStopButton: some View {
+        if timer.isRunning {
+            GlassPill(title: L("Zastavit"), symbol: "stop.fill", tint: Color.red.opacity(0.35)) {
+                timer.stop()
+            }
+            .help(L("Zastavit časovač"))
+        } else {
+            GlassPill(title: L("Spustit"), symbol: "play.fill", tint: settings.accent.color.opacity(0.45)) {
+                timer.start(minutes: selectedMinutes)
+            }
+            .help(L("Spustit časovač na %d min", selectedMinutes))
+        }
     }
 
     private var ring: some View {
@@ -99,20 +129,22 @@ struct ToolsView: View {
                 .animation(.linear(duration: 0.5), value: remainingFraction)
             VStack(spacing: 0) {
                 Text(ringText)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .font(.system(size: 21, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
                     .foregroundStyle(Color.white)
-                Text(timer.isRunning ? "zbývá" : "připraveno")
+                Text(timer.isRunning ? L("zbývá") : L("připraveno"))
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .padding(.horizontal, lineWidth + 6)
         }
         .padding(lineWidth / 2)
-        .frame(width: 110, height: 110)
+        .frame(width: ringSize, height: ringSize)
     }
 
     /// Čas v prstenci: „mm:ss“, od hodiny výš „h:mm:ss“ (předvolby až 180 min).
@@ -143,7 +175,7 @@ struct ToolsView: View {
     private var focusCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: NotchLayout.spacingS) {
-                CardLabel(symbol: "moon.fill", title: "Soustředění")
+                CardLabel(symbol: "moon.fill", title: L("Soustředění"))
                 Spacer(minLength: 0)
                 Toggle("", isOn: $settings.focusWithTimer)
                     .toggleStyle(.switch)
@@ -166,12 +198,12 @@ struct ToolsView: View {
                         MediaKeyInterceptor.shared.requestAccess()
                         focus.refreshPermission()
                     } label: {
-                        Text("Povolit")
+                        Text(L("Povolit"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(settings.accent.color)
                     }
                     .buttonStyle(.plain)
-                    .help("Povolit NotchMaxu Zpřístupnění, aby mohl přepínat Nerušit")
+                    .help(L("Povolit NotchMaxu Zpřístupnění, aby mohl přepínat Nerušit"))
                 }
             }
             .help(focusStatus.text)
@@ -186,7 +218,7 @@ struct ToolsView: View {
     private var awakeCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: NotchLayout.spacingS) {
-                CardLabel(symbol: "cup.and.saucer.fill", title: "Nenechat usnout")
+                CardLabel(symbol: "cup.and.saucer.fill", title: L("Nenechat usnout"))
                 Spacer(minLength: 0)
                 Toggle("", isOn: $timer.keepAwake)
                     .toggleStyle(.switch)
@@ -194,28 +226,30 @@ struct ToolsView: View {
                     .labelsHidden()
                     .tint(settings.accent.color)
             }
-            Text(timer.keepAwake ? "Displej zůstane zapnutý." : "Vypnuto.")
+            Text(timer.keepAwake ? L("Displej zůstane zapnutý.") : L("Vypnuto."))
                 .font(.system(size: 10))
                 .foregroundStyle(Color.white.opacity(0.55))
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .glassCard(padding: NotchLayout.spacingM)
     }
 
     private var focusStatus: (text: String, color: Color) {
         if !settings.focusWithTimer {
-            return ("Vypnuto", Color.white.opacity(0.3))
+            return (L("Vypnuto"), Color.white.opacity(0.3))
         }
         if focus.needsAccessibility {
-            return ("Potřebuje Zpřístupnění", Color.orange)
+            return (L("Potřebuje Zpřístupnění"), Color.orange)
         }
-        if timer.focusError != nil {
-            return ("Chyba – viz časovač", Color.orange)
+        // Chybu ukázat jen, když je čerstvá – jinak připravený stav.
+        if visibleFocusError != nil {
+            return (L("Chyba – viz časovač"), Color.orange)
         }
         if timer.focusActive {
-            return ("Nerušit zapnuto s časovačem", Color.green)
+            return (L("Nerušit zapnuto s časovačem"), Color.green)
         }
-        return ("Připraveno – zapne Nerušit", Color.green)
+        return (L("Připraveno – zapne Nerušit"), Color.green)
     }
 }
 
@@ -246,8 +280,9 @@ private struct PresetChip: View {
             }
             .foregroundStyle(Color.white)
             .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
-            .frame(height: 32)
+            .frame(height: 30)
             .contentShape(Capsule())
         }
         .buttonStyle(NotchGlassButtonStyle(shape: Capsule(), tint: isSelected ? tint.opacity(0.5) : nil))
@@ -257,6 +292,6 @@ private struct PresetChip: View {
                 .allowsHitTesting(false)
         )
         .hoverScale(1.04)
-        .help("\(minutes) minut")
+        .help(L("%d minut", minutes))
     }
 }

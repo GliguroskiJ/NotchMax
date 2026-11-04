@@ -32,15 +32,15 @@ struct MirrorView: View {
             deniedState
         case .noCamera:
             EmptyState(symbol: "video.slash",
-                       title: "Žádná kamera",
-                       message: "Připoj kameru nebo iPhone (Kamera Continuity).")
+                       title: L("Žádná kamera"),
+                       message: L("Připoj kameru nebo iPhone (Kamera Continuity)."))
                 .glassCard()
         case .failed(let message):
             VStack(spacing: NotchLayout.spacingS) {
                 EmptyState(symbol: "exclamationmark.triangle",
-                           title: "Kameru se nepodařilo spustit",
+                           title: L("Kameru se nepodařilo spustit"),
                            message: message)
-                GlassPill(title: "Zkusit znovu", symbol: "arrow.clockwise") {
+                GlassPill(title: L("Zkusit znovu"), symbol: "arrow.clockwise") {
                     camera.retry()
                 }
             }
@@ -57,7 +57,7 @@ struct MirrorView: View {
             ProgressView()
                 .controlSize(.small)
                 .tint(Color.white)
-            Text("Žádám o přístup ke kameře…")
+            Text(L("Žádám o přístup ke kameře…"))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.75))
         }
@@ -68,9 +68,9 @@ struct MirrorView: View {
     private var deniedState: some View {
         VStack(spacing: NotchLayout.spacingS) {
             EmptyState(symbol: "video.slash",
-                       title: "Přístup ke kameře je zakázán",
-                       message: "Povol NotchMaxu kameru v Nastavení systému → Soukromí a zabezpečení → Kamera.")
-            GlassPill(title: "Otevřít nastavení", symbol: "gearshape") {
+                       title: L("Přístup ke kameře je zakázán"),
+                       message: L("Povol NotchMaxu kameru v Nastavení systému → Soukromí a zabezpečení → Kamera."))
+            GlassPill(title: L("Otevřít nastavení"), symbol: "gearshape") {
                 SystemSettingsLink.open(.camera)
             }
         }
@@ -148,11 +148,11 @@ struct MirrorView: View {
     private var controls: some View {
         HStack(spacing: NotchLayout.spacingS) {
             if camera.devices.count > 1 {
-                GlassPill(title: shortName(camera.currentDevice?.localizedName ?? "Kamera"),
+                GlassPill(title: shortName(camera.currentDevice?.localizedName ?? L("Kamera")),
                           symbol: "arrow.triangle.2.circlepath.camera") {
                     camera.selectNextDevice()
                 }
-                .help("Přepnout kameru")
+                .help(L("Přepnout kameru"))
             }
             Spacer(minLength: 0)
             GlassIconButton(symbol: "arrow.left.and.right.righttriangle.left.righttriangle.right",
@@ -160,19 +160,19 @@ struct MirrorView: View {
                             size: NotchLayout.controlHeight) {
                 mirrored.toggle()
             }
-            .help(mirrored ? "Vypnout zrcadlení" : "Zapnout zrcadlení")
-            GlassPill(title: "Světlo",
+            .help(mirrored ? L("Vypnout zrcadlení") : L("Zapnout zrcadlení"))
+            GlassPill(title: L("Světlo"),
                       symbol: light ? "lightbulb.fill" : "lightbulb",
                       tint: light ? Color.white.opacity(0.3) : nil) {
                 light.toggle()
             }
-            .help("Kruhové světlo kolem náhledu")
+            .help(L("Kruhové světlo kolem náhledu"))
         }
         .padding(NotchLayout.spacingS)
     }
 
     private func shortName(_ name: String) -> String {
-        let limit = 22
+        let limit = 18
         guard name.count > limit else { return name }
         return String(name.prefix(limit - 1)) + "…"
     }

@@ -26,9 +26,11 @@ struct NotchGeometry {
 
 enum NotchLayout {
     /// Pevná velikost průhledného okna (obsahuje i prostor pro stín a animaci nabíjení).
-    static let panelSize = CGSize(width: 720, height: 320)
-    /// Velikost rozbaleného notche.
-    static let openSize = CGSize(width: 680, height: 252)
+    static let panelSize = CGSize(width: 640, height: 300)
+    /// Velikost rozbaleného notche. Šířka = levý sloupec hlavičky (lišta záložek) + mezera pro notch
+    /// + pravý sloupec (tlačítka) + boční odsazení; obsah pod hlavičkou je široký `contentWidth` (534 pt).
+    /// Výška: headerTop 10 + controlHeight 28 + headerGap 10 + obsah 188 + margin 14 = 250.
+    static let openSize = CGSize(width: 600, height: 250)
 
     // MARK: Zavřený notch a live activity
     /// Horní (vnější) zaoblení zavřeného tvaru – o tolik tvar na každé straně přesahuje fyzický notch.
@@ -37,7 +39,8 @@ enum NotchLayout {
     /// svisle ~8 pt volna a obal alba poloměr 5, takže 8 + 5 = 13.
     static let closedBottomRadius: CGFloat = 13
     /// Odsazení obsahu live activity od vnějšího (zaobleného) okraje.
-    static let compactOuterPadding: CGFloat = 12
+    /// Malé, aby obsah vlevo přiléhal k levému a vpravo k pravému vnějšímu okraji.
+    static let compactOuterPadding: CGFloat = 7
     /// Odsazení obsahu live activity od fyzického notche.
     static let compactInnerPadding: CGFloat = 4
     /// Velikost ikony / obalu alba v live activity.
@@ -53,6 +56,12 @@ enum NotchLayout {
     static let spacingL: CGFloat = 14
     /// Jednotný okraj obsahu rozbaleného panelu (po stranách, dole i mezi kartami).
     static let margin: CGFloat = 14
+    /// Odsazení hlavičky (záložky, tlačítka) od horního okraje panelu.
+    static let headerTop: CGFloat = 10
+    /// Mezera mezi hlavičkou a kartami – stejná jako `headerTop`.
+    static let headerGap: CGFloat = 10
+    /// Mezera pro fyzický notch v hlavičce navíc k jeho šířce (dohromady za obě strany).
+    static let headerNotchMargin: CGFloat = 12
 
     // MARK: Poloměry
     /// Poloměry rozbaleného tvaru (horní rohy tvar rozšiřují, obsah se o ně musí odsadit).
@@ -68,6 +77,8 @@ enum NotchLayout {
     static let controlHeight: CGFloat = 28
     /// Boční odsazení obsahu od okraje okna (horní poloměr tvaru + okraj).
     static let sideInset: CGFloat = openTopRadius + margin
+    /// Šířka obsahové oblasti rozbaleného panelu (600 - 2 × 33 = 534 pt).
+    static let contentWidth: CGFloat = openSize.width - 2 * sideInset
     /// Šířka pravého sloupce karet (Přehled, Nástroje).
     static let columnWidth: CGFloat = 170
 }

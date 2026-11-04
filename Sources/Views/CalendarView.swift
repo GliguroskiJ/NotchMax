@@ -15,8 +15,8 @@ extension CalEvent {
 
     var dayLabel: String {
         let cal = Calendar.current
-        if cal.isDateInToday(start) { return "Dnes" }
-        if cal.isDateInTomorrow(start) { return "Zítra" }
+        if cal.isDateInToday(start) { return L("Dnes") }
+        if cal.isDateInTomorrow(start) { return L("Zítra") }
         return start.formatted(date: .abbreviated, time: .omitted)
     }
 
@@ -25,7 +25,7 @@ extension CalEvent {
 
     /// Čas pro zobrazení: „Celý den“, „9:00 – 10:00“ nebo jen „9:00“ u událostí bez délky.
     var timeText: String {
-        if isDayLong { return "Celý den" }
+        if isDayLong { return L("Celý den") }
         if end <= start { return startText }
         return "\(startText) – \(endText)"
     }
@@ -67,7 +67,7 @@ struct CalendarView: View {
     private var content: some View {
         if calendar.hasAnySource {
             if calendar.events.isEmpty {
-                EmptyState(symbol: "checkmark.circle", title: "Volno", message: "Žádné události dnes ani zítra")
+                EmptyState(symbol: "checkmark.circle", title: L("Volno"), message: L("Žádné události dnes ani zítra"))
             } else {
                 ScrollView {
                     VStack(spacing: 6) {
@@ -86,18 +86,18 @@ struct CalendarView: View {
                         .foregroundStyle(CalendarConnectStyle.accent)
                         .frame(width: 38, height: 38)
                         .background(Circle().fill(CalendarConnectStyle.accent.opacity(0.18)))
-                    Text("Kalendář")
+                    Text(L("Kalendář"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.85))
                     Text(calendar.access == .denied
-                         ? "Přístup ke kalendářům macOS je zamítnutý. Povol ho v Nastavení."
-                         : "Připoj kalendáře macOS – iCloud, Google i další účty.")
+                         ? L("Přístup ke kalendářům macOS je zamítnutý. Povol ho v Nastavení.")
+                         : L("Připoj kalendáře macOS – iCloud, Google i další účty."))
                         .font(.system(size: 10.5))
                         .foregroundStyle(Color.white.opacity(0.5))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus",
+                GlassPill(title: L("Připojit kalendář"), symbol: "calendar.badge.plus",
                           tint: CalendarConnectStyle.tint) { openNotchMaxSettings(section: "calendar") }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -123,7 +123,7 @@ struct CalendarView: View {
             }
             Spacer(minLength: 4)
             if let url = e.joinURL {
-                GlassPill(title: "Připojit", symbol: "video.fill", tint: Color.green.opacity(0.4)) { openURL(url) }
+                GlassPill(title: L("Připojit"), symbol: "video.fill", tint: Color.green.opacity(0.4)) { openURL(url) }
             }
         }
         .padding(.horizontal, NotchLayout.spacingM)
@@ -143,8 +143,10 @@ struct CalendarView: View {
     @ViewBuilder
     private func timeColumn(_ e: CalEvent) -> some View {
         if e.isDayLong {
-            Text("Celý den")
+            Text(L("Celý den"))
                 .font(.system(size: 10, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .foregroundStyle(Color.white.opacity(0.6))
         } else {
             VStack(alignment: .leading, spacing: 1) {

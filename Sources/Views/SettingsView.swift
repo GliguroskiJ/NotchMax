@@ -7,7 +7,7 @@ import ServiceManagement
 /// Sekce okna nastavení. Raw value slouží k navigaci zvenku
 /// (`openNotchMaxSettings(section: "calendar")`) – hodnoty neměnit.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, appearance, notch, panel, focus, calendar, notifications, permissions, agents, updates
+    case general, appearance, notch, panel, focus, calendar, permissions, agents, updates
 
     var id: String { rawValue }
 
@@ -21,7 +21,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case "activities", "hud": self = .notch
         case "modules", "tabs": self = .panel
         case "timer": self = .focus
-        case "privacy": self = .permissions
+        case "privacy", "notifications": self = .permissions
         case "claude": self = .agents
         default: return nil
         }
@@ -29,16 +29,15 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .general: return "Obecné"
-        case .appearance: return "Vzhled"
-        case .notch: return "Notch"
-        case .panel: return "Panel"
-        case .focus: return "Časovač a soustředění"
-        case .calendar: return "Kalendář"
-        case .notifications: return "Oznámení"
-        case .permissions: return "Oprávnění"
-        case .agents: return "Agenti"
-        case .updates: return "Aktualizace"
+        case .general: return L("Obecné")
+        case .appearance: return L("Vzhled")
+        case .notch: return L("Notch")
+        case .panel: return L("Panel")
+        case .focus: return L("Časovač a soustředění")
+        case .calendar: return L("Kalendář")
+        case .permissions: return L("Oprávnění")
+        case .agents: return L("Agenti")
+        case .updates: return L("Aktualizace")
         }
     }
 
@@ -50,7 +49,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .panel: return "square.grid.2x2"
         case .focus: return "timer"
         case .calendar: return "calendar"
-        case .notifications: return "bell.badge"
         case .permissions: return "lock.shield"
         case .agents: return "sparkles"
         case .updates: return "arrow.triangle.2.circlepath"
@@ -139,6 +137,8 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(white: 0.11))
         }
+        // Změna jazyka: celý obsah okna se sestaví znovu, aby se přeložily všechny texty.
+        .id(settings.language)
         .frame(width: 900, height: 620)
         .background(VisualEffectBackground())
         .onAppear {
@@ -166,7 +166,6 @@ struct SettingsView: View {
         case .panel: PanelSettings()
         case .focus: FocusSettingsSection()
         case .calendar: CalendarSettings()
-        case .notifications: NotificationSettingsSection()
         case .permissions: PermissionsSettingsSection()
         case .agents: ClaudeSettingsSection()
         case .updates: UpdateSettings()
@@ -214,15 +213,14 @@ private struct SettingsSidebar: View {
             sidebarItem(.general)
             sidebarItem(.appearance)
 
-            SidebarGroupTitle(title: "Funkce")
+            SidebarGroupTitle(title: L("Funkce"))
             sidebarItem(.notch)
             sidebarItem(.panel)
             sidebarItem(.focus)
             sidebarItem(.calendar)
-            sidebarItem(.notifications)
             sidebarItem(.agents)
 
-            SidebarGroupTitle(title: "Aplikace")
+            SidebarGroupTitle(title: L("Aplikace"))
             sidebarItem(.permissions)
             sidebarItem(.updates)
 
@@ -241,7 +239,7 @@ private struct SettingsSidebar: View {
                     Text("NotchMax")
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(Color.white)
-                    Text("Verze \(shortVersion)")
+                    Text(L("Verze %@", shortVersion))
                         .font(.system(size: 12.5))
                         .foregroundStyle(Color.white.opacity(0.45))
                 }
@@ -287,7 +285,7 @@ private struct SidebarItem: View {
                         .padding(.horizontal, 6)
                         .frame(minWidth: 18, minHeight: 18)
                         .background(Capsule().fill(Color.orange))
-                        .help("Chybějící oprávnění")
+                        .help(L("Chybějící oprávnění"))
                 }
             }
             .padding(.horizontal, 10)
@@ -527,19 +525,33 @@ private struct GeneralSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Spuštění") {
-                SettingsToggleRow(title: "Spouštět při přihlášení",
-                                  subtitle: "NotchMax se spustí automaticky po přihlášení k Macu.",
+            SettingsCard(header: L("Jazyk")) {
+                SettingsRow(title: L("Jazyk / Language"),
+                            subtitle: L("Jazyk rozhraní NotchMaxu.")) {
+                    Picker("", selection: $settings.language) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.title).tag(language)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+            }
+
+            SettingsCard(header: L("Spuštění")) {
+                SettingsToggleRow(title: L("Spouštět při přihlášení"),
+                                  subtitle: L("NotchMax se spustí automaticky po přihlášení k Macu."),
                                   isOn: launchBinding)
                 SettingsDivider()
-                SettingsToggleRow(title: "Globální zkratka ⌥⌘N",
-                                  subtitle: "Otevře a zavře notch z klávesnice.",
+                SettingsToggleRow(title: L("Globální zkratka ⌥⌘N"),
+                                  subtitle: L("Otevře a zavře notch z klávesnice."),
                                   isOn: $settings.hotkeyEnabled)
             }
 
-            SettingsCard(header: "Chování") {
-                SettingsRow(title: "Prodleva při najetí",
-                            subtitle: "Jak dlouho musí myš zůstat na notchi, než se rozbalí.") {
+            SettingsCard(header: L("Chování")) {
+                SettingsRow(title: L("Prodleva při najetí"),
+                            subtitle: L("Jak dlouho musí myš zůstat na notchi, než se rozbalí.")) {
                     HStack(spacing: 10) {
                         Slider(value: $settings.hoverDelay, in: 0...0.6)
                             .tint(settings.accent.color)
@@ -551,8 +563,8 @@ private struct GeneralSettings: View {
                     }
                 }
                 SettingsDivider()
-                SettingsRow(title: "Zobrazit na",
-                            subtitle: "Na kterém displeji se notch zobrazí.") {
+                SettingsRow(title: L("Zobrazit na"),
+                            subtitle: L("Na kterém displeji se notch zobrazí.")) {
                     Picker("", selection: $settings.display) {
                         ForEach(DisplayChoice.allCases) { Text($0.title).tag($0) }
                     }
@@ -563,7 +575,7 @@ private struct GeneralSettings: View {
             }
 
             HStack {
-                GlassPill(title: "Ukončit NotchMax", symbol: "power") {
+                GlassPill(title: L("Ukončit NotchMax"), symbol: "power") {
                     NSApp.terminate(nil)
                 }
                 .fixedSize()
@@ -629,8 +641,8 @@ private struct HueSlider: View {
         }
         .frame(height: thumbSize + 6)
         .accessibilityElement()
-        .accessibilityLabel("Odstín akcentní barvy")
-        .accessibilityValue("\(Int((hue * 360).rounded())) stupňů")
+        .accessibilityLabel(L("Odstín akcentní barvy"))
+        .accessibilityValue(L("%ld stupňů", Int((hue * 360).rounded())))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: setHue(hue + 1.0 / 72)
@@ -722,8 +734,8 @@ private struct AccentColorCard: View {
     }
 
     private var hueDescription: String {
-        if settings.accentWhite { return "Bílá" }
-        return "Odstín \(Int((settings.accentHue * 360).rounded()))°"
+        if settings.accentWhite { return L("Bílá") }
+        return L("Odstín %ld°", Int((settings.accentHue * 360).rounded()))
     }
 
     private func isPresetSelected(_ choice: AccentChoice) -> Bool {
@@ -732,7 +744,7 @@ private struct AccentColorCard: View {
     }
 
     var body: some View {
-        SettingsCard(header: "Barva zvýraznění") {
+        SettingsCard(header: L("Barva zvýraznění")) {
             HStack(alignment: .center, spacing: 16) {
                 // Náhled
                 ZStack {
@@ -774,8 +786,8 @@ private struct AccentColorCard: View {
             }
             .padding(.vertical, 14)
             SettingsDivider()
-            SettingsToggleRow(title: "Bílá",
-                              subtitle: "Neutrální bílé zvýraznění místo barevného odstínu.",
+            SettingsToggleRow(title: L("Bílá"),
+                              subtitle: L("Neutrální bílé zvýraznění místo barevného odstínu."),
                               isOn: $settings.accentWhite)
         }
     }
@@ -788,9 +800,9 @@ private struct AppearanceSettings: View {
         VStack(alignment: .leading, spacing: 16) {
             AccentColorCard()
 
-            SettingsCard(header: "Poloha a velikost notche") {
-                SettingsRow(title: "Posun nahoru / dolů",
-                            subtitle: "Doladění, aby tvar přesně seděl na fyzický notch. Kladná hodnota posune nahoru.") {
+            SettingsCard(header: L("Poloha a velikost notche")) {
+                SettingsRow(title: L("Posun nahoru / dolů"),
+                            subtitle: L("Doladění, aby tvar přesně seděl na fyzický notch. Kladná hodnota posune nahoru.")) {
                     HStack(spacing: 10) {
                         Slider(value: $settings.notchOffsetY, in: -12...12, step: 1)
                             .tint(settings.accent.color)
@@ -802,8 +814,8 @@ private struct AppearanceSettings: View {
                     }
                 }
                 SettingsDivider()
-                SettingsRow(title: "Přesah pod notch",
-                            subtitle: "O kolik tvar vyčnívá pod fyzický notch. 0 = přesně na jeho výšku.") {
+                SettingsRow(title: L("Přesah pod notch"),
+                            subtitle: L("O kolik tvar vyčnívá pod fyzický notch. 0 = přesně na jeho výšku.")) {
                     HStack(spacing: 10) {
                         Slider(value: $settings.notchOverhang, in: 0...10, step: 1)
                             .tint(settings.accent.color)
@@ -815,34 +827,34 @@ private struct AppearanceSettings: View {
                     }
                 }
                 SettingsDivider()
-                SettingsRow(title: "Výchozí hodnoty",
-                            subtitle: String(format: "Posun %+.0f px, přesah %.0f px.",
-                                             AppSettings.defaultNotchOffsetY, AppSettings.defaultNotchOverhang)) {
-                    GlassPill(title: "Obnovit", symbol: "arrow.counterclockwise") {
+                SettingsRow(title: L("Výchozí hodnoty"),
+                            subtitle: L("Posun %+.0f px, přesah %.0f px.",
+                                        AppSettings.defaultNotchOffsetY, AppSettings.defaultNotchOverhang)) {
+                    GlassPill(title: L("Obnovit"), symbol: "arrow.counterclockwise") {
                         settings.resetNotchGeometry()
                     }
                     .fixedSize()
                 }
             }
 
-            SettingsCard(header: "Animace nabíjení") {
-                SettingsToggleRow(title: "Animace při zapojení nabíječky",
+            SettingsCard(header: L("Animace nabíjení")) {
+                SettingsToggleRow(title: L("Animace při zapojení nabíječky"),
                                   isOn: $settings.chargingAnimation)
                 SettingsDivider()
-                ChargeInsetRow(title: "Levá strana", value: $settings.chargeInsetLeft)
+                ChargeInsetRow(title: L("Levá strana"), value: $settings.chargeInsetLeft)
                 SettingsDivider()
-                ChargeInsetRow(title: "Pravá strana", value: $settings.chargeInsetRight)
+                ChargeInsetRow(title: L("Pravá strana"), value: $settings.chargeInsetRight)
                 SettingsDivider()
                 SettingsNote(symbol: "info.circle",
-                             text: "Zúží (+) nebo rozšíří (−) obrys nabíjení. Po změně se animace přehraje.")
+                             text: L("Zúží (+) nebo rozšíří (−) obrys nabíjení. Po změně se animace přehraje."))
                 SettingsDivider()
-                SettingsRow(title: "Vyzkoušet animaci") {
+                SettingsRow(title: L("Vyzkoušet animaci")) {
                     HStack(spacing: 8) {
-                        GlassPill(title: "Obnovit", symbol: "arrow.counterclockwise") {
+                        GlassPill(title: L("Obnovit"), symbol: "arrow.counterclockwise") {
                             settings.resetChargeInsets()
                         }
                         .fixedSize()
-                        GlassPill(title: "Přehrát", symbol: "play.fill") {
+                        GlassPill(title: L("Přehrát"), symbol: "play.fill") {
                             AppServices.shared.viewModel?.runChargeAnimation()
                         }
                         .fixedSize()
@@ -854,7 +866,7 @@ private struct AppearanceSettings: View {
             SettingsCard {
                 SettingsNote(
                     symbol: "moon.fill",
-                    text: "Aplikace je záměrně jen v tmavém režimu, aby splynula s černým notchem. Skleněné prvky vypadají stejně, ať je panel aktivní, nebo ne."
+                    text: L("Aplikace je záměrně jen v tmavém režimu, aby splynula s černým notchem. Skleněné prvky vypadají stejně, ať je panel aktivní, nebo ne.")
                 )
             }
         }
@@ -893,7 +905,7 @@ private struct ChargeInsetRow: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(value == AppSettings.defaultChargeInset)
-                .help("Vrátit na výchozí hodnotu")
+                .help(L("Vrátit na výchozí hodnotu"))
             }
         }
     }
@@ -952,20 +964,20 @@ private struct NotchSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Živé aktivity vedle notche") {
-                SettingsToggleRow(title: "Hudba", subtitle: "Obal alba a ekvalizér.",
+            SettingsCard(header: L("Živé aktivity vedle notche")) {
+                SettingsToggleRow(title: L("Hudba"), subtitle: L("Obal alba a ekvalizér."),
                                   isOn: $settings.liveMusic)
                 SettingsDivider()
-                SettingsToggleRow(title: "Časovač", isOn: $settings.liveTimer)
+                SettingsToggleRow(title: L("Časovač"), isOn: $settings.liveTimer)
                 SettingsDivider()
-                SettingsToggleRow(title: "Blížící se schůzka", subtitle: "Zobrazí se 10 minut předem.",
+                SettingsToggleRow(title: L("Blížící se schůzka"), subtitle: L("Zobrazí se 10 minut předem."),
                                   isOn: $settings.liveCalendar)
                 SettingsDivider()
-                SettingsToggleRow(title: "Claude agenti", subtitle: "Stav běžících Claude agentů.",
+                SettingsToggleRow(title: L("Claude agenti"), subtitle: L("Stav běžících Claude agentů."),
                                   isOn: $settings.liveClaude)
                 SettingsDivider()
                 SettingsNote(symbol: "rectangle.split.2x1",
-                             text: "Dvě aktivity naráz se řeší automaticky: když běží víc aktivit (třeba hudba a časovač), notch ukáže dvě naposledy spuštěné – jednu vlevo a jednu vpravo od notche. Nic dalšího nastavovat nemusíš.")
+                             text: L("Dvě aktivity naráz se řeší automaticky: když běží víc aktivit (třeba hudba a časovač), notch ukáže dvě naposledy spuštěné – jednu vlevo a jednu vpravo od notche. Nic dalšího nastavovat nemusíš."))
             }
 
             HUDSettingsSection()
@@ -980,24 +992,24 @@ private struct PanelSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Záložky v rozbaleném notchi") {
-                TabToggleRow(title: "Kalendář", isOn: $settings.tabCalendar)
+            SettingsCard(header: L("Záložky v rozbaleném notchi")) {
+                TabToggleRow(title: L("Kalendář"), isOn: $settings.tabCalendar)
                 SettingsDivider()
-                TabToggleRow(title: "Odkladiště souborů", isOn: $settings.tabShelf)
+                TabToggleRow(title: L("Odkladiště souborů"), isOn: $settings.tabShelf)
                 SettingsDivider()
-                TabToggleRow(title: "Nástroje", subtitle: "Časovač a další rychlé nástroje.", isOn: $settings.tabTools)
+                TabToggleRow(title: L("Nástroje"), subtitle: L("Časovač a další rychlé nástroje."), isOn: $settings.tabTools)
                 SettingsDivider()
-                TabToggleRow(title: "Systém", subtitle: "Statistiky CPU, paměti a sítě.", isOn: $settings.tabSystem)
+                TabToggleRow(title: L("Systém"), subtitle: L("Statistiky CPU, paměti a sítě."), isOn: $settings.tabSystem)
                 SettingsDivider()
-                TabToggleRow(title: "Agenti", subtitle: "Přehled Claude agentů.", isOn: $settings.tabAgents)
+                TabToggleRow(title: L("Agenti"), subtitle: L("Přehled Claude agentů."), isOn: $settings.tabAgents)
                 SettingsDivider()
                 SettingsNote(symbol: "info.circle",
-                             text: "V notchi se vejde nejvýš 5 záložek včetně Domů – víc by se schovalo za fyzický notch.")
+                             text: L("V notchi se vejde nejvýš 5 záložek včetně Domů – víc by se schovalo za fyzický notch."))
             }
 
-            SettingsCard(header: "Zrcátko") {
-                SettingsToggleRow(title: "Tlačítko kamery v notchi",
-                                  subtitle: "Rychlý náhled z kamery – zkontroluj se před hovorem.",
+            SettingsCard(header: L("Zrcátko")) {
+                SettingsToggleRow(title: L("Tlačítko kamery v notchi"),
+                                  subtitle: L("Rychlý náhled z kamery – zkontroluj se před hovorem."),
                                   isOn: $settings.mirrorButton)
                 if settings.mirrorButton {
                     SettingsDivider()
@@ -1005,14 +1017,14 @@ private struct PanelSettings: View {
                 }
             }
 
-            SettingsCard(header: "Odkladiště") {
-                SettingsRow(title: "Mazat odkladiště po",
-                            subtitle: "Soubory v odkladišti se po této době samy odeberou.") {
+            SettingsCard(header: L("Odkladiště")) {
+                SettingsRow(title: L("Mazat odkladiště po"),
+                            subtitle: L("Soubory v odkladišti se po této době samy odeberou.")) {
                     Picker("", selection: $settings.shelfTTLHours) {
-                        Text("1 hodině").tag(1)
-                        Text("24 hodinách").tag(24)
-                        Text("7 dnech").tag(168)
-                        Text("Nikdy").tag(0)
+                        Text(L("1 hodině")).tag(1)
+                        Text(L("24 hodinách")).tag(24)
+                        Text(L("7 dnech")).tag(168)
+                        Text(L("Nikdy")).tag(0)
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -1024,7 +1036,7 @@ private struct PanelSettings: View {
 }
 
 // Kalendář: `CalendarSettings` je definováno v samostatném souboru.
-// Oznámení a Oprávnění: `NotificationSettingsSection` a `PermissionsSettingsSection` v HUDSettingsSection.swift.
+// Oprávnění: `PermissionsSettingsSection` v HUDSettingsSection.swift.
 
 // MARK: - Aktualizace
 
@@ -1049,7 +1061,7 @@ private struct UpdateSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Verze") {
+            SettingsCard(header: L("Verze")) {
                 HStack(spacing: 14) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -1064,37 +1076,37 @@ private struct UpdateSettings: View {
                         Text("NotchMax \(shortVersion)")
                             .font(.system(size: 16.5, weight: .semibold))
                             .foregroundStyle(Color.white)
-                        Text("Sestavení \(buildNumber)")
+                        Text(L("Sestavení %@", buildNumber))
                             .font(.system(size: 12.5))
                             .foregroundStyle(Color.white.opacity(0.5))
                     }
                     Spacer(minLength: 8)
-                    GlassPill(title: "Zkontrolovat", symbol: "arrow.clockwise") {
+                    GlassPill(title: L("Zkontrolovat"), symbol: "arrow.clockwise") {
                         updates.checkNow()
                     }
                     .fixedSize()
                 }
                 .padding(.vertical, 14)
                 SettingsDivider()
-                SettingsRow(title: "Poslední kontrola") {
+                SettingsRow(title: L("Poslední kontrola")) {
                     Text(lastCheckText)
                         .font(.system(size: 13.5))
                         .foregroundStyle(Color.white.opacity(0.7))
                 }
             }
 
-            SettingsCard(header: "Automatické kontroly") {
+            SettingsCard(header: L("Automatické kontroly")) {
                 SettingsToggleRow(
-                    title: "Kontrolovat automaticky",
-                    subtitle: "Kontrola probíhá při startu, po probuzení Macu a jednou denně. Aktualizace se nainstaluje vždy až po tvém potvrzení.",
+                    title: L("Kontrolovat automaticky"),
+                    subtitle: L("Kontrola probíhá při startu, po probuzení Macu a jednou denně. Aktualizace se nainstaluje vždy až po tvém potvrzení."),
                     isOn: autoBinding
                 )
             }
 
-            SettingsCard(header: "Po aktualizaci") {
-                SettingsActionRow(title: "Zkontroluj oprávnění",
-                                  subtitle: "Po aktualizaci nepodepsaného sestavení může macOS zapomenout udělená oprávnění.") {
-                    GlassPill(title: "Zobrazit oprávnění", symbol: "lock.shield") {
+            SettingsCard(header: L("Po aktualizaci")) {
+                SettingsActionRow(title: L("Zkontroluj oprávnění"),
+                                  subtitle: L("Po aktualizaci nepodepsaného sestavení může macOS zapomenout udělená oprávnění.")) {
+                    GlassPill(title: L("Zobrazit oprávnění"), symbol: "lock.shield") {
                         showSettingsSection(.permissions)
                     }
                     .fixedSize()
@@ -1107,6 +1119,6 @@ private struct UpdateSettings: View {
         if let last = updates.lastCheckDate {
             return last.formatted(date: .abbreviated, time: .shortened)
         }
-        return "Zatím neproběhla"
+        return L("Zatím neproběhla")
     }
 }

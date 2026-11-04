@@ -163,7 +163,7 @@ final class CameraMirror: ObservableObject {
                 if session.canAddInput(input) {
                     session.addInput(input)
                 } else {
-                    errorText = "Tuto kameru teď nelze použít."
+                    errorText = L("Tuto kameru teď nelze použít.")
                 }
             } catch {
                 errorText = error.localizedDescription

@@ -217,7 +217,7 @@ struct GlassPill: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 if let symbol { Image(systemName: symbol).font(.system(size: 11, weight: .semibold)) }
-                Text(title).font(.system(size: 12, weight: .semibold))
+                Text(L(title)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
             }
             .foregroundStyle(Color.white)
             .padding(.horizontal, 12)

@@ -15,9 +15,9 @@ enum ClaudeSessionState: String, Sendable, Equatable {
 
     var title: String {
         switch self {
-        case .working: return "Pracuje"
-        case .waiting: return "Čeká na tebe"
-        case .idle: return "Nečinný"
+        case .working: return L("Pracuje")
+        case .waiting: return L("Čeká na tebe")
+        case .idle: return L("Nečinný")
         }
     }
 }
@@ -63,9 +63,9 @@ enum ClaudeHooksError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidSettings:
-            return "Soubor ~/.claude/settings.json není platný JSON objekt. Oprav ho ručně, NotchMax ho nepřepíše."
+            return L("Soubor ~/.claude/settings.json není platný JSON objekt. Oprav ho ručně, NotchMax ho nepřepíše.")
         case .writeFailed(let reason):
-            return "Nepodařilo se upravit ~/.claude/settings.json: \(reason)"
+            return L("Nepodařilo se upravit ~/.claude/settings.json: %@", reason)
         }
     }
 }

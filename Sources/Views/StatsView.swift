@@ -90,7 +90,7 @@ struct StatsView: View {
     // MARK: Karty – první řada
 
     private var cpuCard: some View {
-        StatCard(symbol: "cpu", title: "Procesor") {
+        StatCard(symbol: "cpu", title: L("Procesor")) {
             StatValue(text: "\(Int((stats.cpu * 100).rounded())) %")
             Sparkline(values: stats.cpuHistory, maxValue: 1, tint: tint)
                 .frame(maxWidth: .infinity, minHeight: 6, maxHeight: .infinity)
@@ -98,16 +98,16 @@ struct StatsView: View {
     }
 
     private var memoryCard: some View {
-        StatCard(symbol: "memorychip", title: "Paměť") {
+        StatCard(symbol: "memorychip", title: L("Paměť")) {
             Spacer(minLength: 0)
             StatValue(text: "\(formatNumber(stats.memoryUsedGB)) GB")
-            StatSubtitle(text: "z \(formatNumber(stats.memoryTotalGB)) GB")
+            StatSubtitle(text: L("z %@ GB", formatNumber(stats.memoryTotalGB)))
             ThinProgress(value: stats.memoryUsedFraction, tint: tint, height: 4)
         }
     }
 
     private var networkCard: some View {
-        StatCard(symbol: "arrow.up.arrow.down", title: "Síť") {
+        StatCard(symbol: "arrow.up.arrow.down", title: L("Síť")) {
             VStack(alignment: .leading, spacing: 1) {
                 rateRow(symbol: "arrow.down", value: stats.netDownBytesPerSec)
                 rateRow(symbol: "arrow.up", value: stats.netUpBytesPerSec)
@@ -118,10 +118,10 @@ struct StatsView: View {
     }
 
     private var diskCard: some View {
-        StatCard(symbol: "internaldrive", title: "Disk") {
+        StatCard(symbol: "internaldrive", title: L("Disk")) {
             Spacer(minLength: 0)
             StatValue(text: "\(formatNumber(stats.diskFreeGB)) GB")
-            StatSubtitle(text: "volno z \(formatNumber(stats.diskTotalGB)) GB")
+            StatSubtitle(text: L("volno z %@ GB", formatNumber(stats.diskTotalGB)))
             ThinProgress(value: diskUsedFraction, tint: tint, height: 4)
         }
     }
@@ -129,7 +129,7 @@ struct StatsView: View {
     // MARK: Karty – druhá řada
 
     private var temperatureCard: some View {
-        StatCard(symbol: "thermometer.medium", title: "Teplota CPU") {
+        StatCard(symbol: "thermometer.medium", title: L("Teplota CPU")) {
             Spacer(minLength: 0)
             if let temp = stats.cpuTemperature {
                 StatValue(text: "\(Int(temp.rounded())) °C")
@@ -137,28 +137,28 @@ struct StatsView: View {
                 ThinProgress(value: (temp - 20) / 80, tint: temp >= 90 ? Color.orange : tint, height: 4)
             } else {
                 StatValue(text: "—")
-                StatSubtitle(text: stats.sensorsLoaded ? "Nedostupné" : " ")
+                StatSubtitle(text: stats.sensorsLoaded ? L("Nedostupné") : " ")
             }
         }
     }
 
     private var fanCard: some View {
-        StatCard(symbol: "fan", title: "Ventilátory") {
+        StatCard(symbol: "fan", title: L("Ventilátory")) {
             Spacer(minLength: 0)
             if let count = stats.fanCount {
                 if count == 0 {
-                    StatValue(text: "Bez ventilátoru", size: 13)
-                    StatSubtitle(text: "Pasivní chlazení")
+                    StatValue(text: L("Bez ventilátoru"), size: 13)
+                    StatSubtitle(text: L("Pasivní chlazení"))
                 } else if let rpm = stats.fanRPM {
                     StatValue(text: "\(formatInteger(rpm)) RPM")
-                    StatSubtitle(text: "\(count) \(czechPlural(count, "ventilátor", "ventilátory", "ventilátorů"))")
+                    StatSubtitle(text: fansText(count))
                 } else {
                     StatValue(text: "—")
-                    StatSubtitle(text: "\(count) \(czechPlural(count, "ventilátor", "ventilátory", "ventilátorů"))")
+                    StatSubtitle(text: fansText(count))
                 }
             } else {
                 StatValue(text: "—")
-                StatSubtitle(text: stats.sensorsLoaded ? "Nedostupné" : " ")
+                StatSubtitle(text: stats.sensorsLoaded ? L("Nedostupné") : " ")
             }
         }
     }
@@ -178,7 +178,7 @@ struct StatsView: View {
     @ViewBuilder
     private var energyCard: some View {
         if let battery = stats.battery {
-            StatCard(symbol: battery.isCharging ? "battery.100percent.bolt" : "bolt", title: "Energie") {
+            StatCard(symbol: battery.isCharging ? "battery.100percent.bolt" : "bolt", title: L("Energie")) {
                 Spacer(minLength: 0)
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     StatValue(text: "\(formatNumber(battery.powerWatts)) W")
@@ -188,10 +188,10 @@ struct StatsView: View {
                 StatSubtitle(text: batteryHealthLabel(battery))
             }
         } else {
-            StatCard(symbol: "clock", title: "Doba běhu") {
+            StatCard(symbol: "clock", title: L("Doba běhu")) {
                 Spacer(minLength: 0)
                 StatValue(text: stats.sensorsLoaded ? formatUptime(stats.uptime) : "—")
-                StatSubtitle(text: "od spuštění systému")
+                StatSubtitle(text: L("od spuštění systému"))
             }
         }
     }
@@ -226,28 +226,45 @@ struct StatsView: View {
 
     private func temperatureLabel(_ temp: Double) -> String {
         switch temp {
-        case ..<60: return "V pohodě"
-        case 60..<80: return "Zahřátý"
-        case 80..<95: return "Horký"
-        default: return "Velmi horký"
+        case ..<60: return L("V pohodě")
+        case 60..<80: return L("Zahřátý")
+        case 80..<95: return L("Horký")
+        default: return L("Velmi horký")
         }
     }
 
     private func powerStateLabel(_ battery: SensorsBatteryInfo) -> String {
-        if battery.isCharging { return "nabíjí" }
-        if battery.externalConnected { return "adaptér" }
-        return "z baterie"
+        if battery.isCharging { return L("nabíjí") }
+        if battery.externalConnected { return L("adaptér") }
+        return L("z baterie")
     }
 
     private func batteryHealthLabel(_ battery: SensorsBatteryInfo) -> String {
         var parts: [String] = []
         if let health = battery.healthPercent {
-            parts.append("Zdraví \(health) %")
+            parts.append(L("Zdraví %d %%", health))
         }
         if let cycles = battery.cycleCount {
-            parts.append("\(cycles) \(czechPlural(cycles, "cyklus", "cykly", "cyklů"))")
+            parts.append(cyclesText(cycles))
         }
-        return parts.isEmpty ? "Baterie" : parts.joined(separator: " · ")
+        return parts.isEmpty ? L("Baterie") : parts.joined(separator: " · ")
+    }
+
+    /// „2 ventilátory“ / „2 fans“.
+    private func fansText(_ n: Int) -> String {
+        if L10n.isEnglish { return n == 1 ? "1 fan" : "\(n) fans" }
+        return "\(n) \(czechPlural(n, "ventilátor", "ventilátory", "ventilátorů"))"
+    }
+
+    /// „300 cyklů“ / „300 cycles“.
+    private func cyclesText(_ n: Int) -> String {
+        if L10n.isEnglish { return n == 1 ? "1 cycle" : "\(n) cycles" }
+        return "\(n) \(czechPlural(n, "cyklus", "cykly", "cyklů"))"
+    }
+
+    /// Číselný formát podle jazyka aplikace (desetinná čárka / tečka).
+    private var numberLocale: Locale {
+        Locale(identifier: L10n.isEnglish ? "en_US" : "cs_CZ")
     }
 
     private func czechPlural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
@@ -267,12 +284,12 @@ struct StatsView: View {
     }
 
     private func formatNumber(_ value: Double) -> String {
-        String(format: "%.1f", locale: Locale(identifier: "cs_CZ"), value)
+        String(format: "%.1f", locale: numberLocale, value)
     }
 
     private func formatInteger(_ value: Double) -> String {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "cs_CZ")
+        formatter.locale = numberLocale
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value.rounded())) ?? "\(Int(value.rounded()))"
@@ -281,10 +298,10 @@ struct StatsView: View {
     private func formatRate(_ bytesPerSec: Double) -> String {
         let kb = bytesPerSec / 1024
         if kb < 1000 {
-            return String(format: "%.0f KB/s", locale: Locale(identifier: "cs_CZ"), kb)
+            return String(format: "%.0f KB/s", locale: numberLocale, kb)
         }
         let mb = kb / 1024
-        return String(format: "%.1f MB/s", locale: Locale(identifier: "cs_CZ"), mb)
+        return String(format: "%.1f MB/s", locale: numberLocale, mb)
     }
 }
 
@@ -315,7 +332,7 @@ private struct StatLabel: View {
         HStack(spacing: 4) {
             Image(systemName: symbol)
                 .font(.system(size: 9, weight: .semibold))
-            Text(title)
+            Text(L(title))
                 .font(.system(size: 10, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)

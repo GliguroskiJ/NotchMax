@@ -12,34 +12,34 @@ struct ClaudeSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(header: "Zobrazení") {
-                TabToggleRow(title: "Záložka Agenti",
-                             subtitle: "Přehled relací Claude Code v rozbaleném notchi.",
+            SettingsCard(header: L("Zobrazení")) {
+                TabToggleRow(title: L("Záložka Agenti"),
+                             subtitle: L("Přehled relací Claude Code v rozbaleném notchi."),
                              isOn: $settings.tabAgents)
                 SettingsDivider()
-                SettingsToggleRow(title: "Živá aktivita u notche",
-                                  subtitle: "Když Claude pracuje nebo čeká na tebe, ukáže se stav vedle notche.",
+                SettingsToggleRow(title: L("Živá aktivita u notche"),
+                                  subtitle: L("Když Claude pracuje nebo čeká na tebe, ukáže se stav vedle notche."),
                                   isOn: $settings.liveClaude)
             }
 
-            SettingsCard(header: "Hooky Claude Code") {
-                SettingsRow(title: "Stav",
+            SettingsCard(header: L("Hooky Claude Code")) {
+                SettingsRow(title: L("Stav"),
                             subtitle: monitor.hooksInstalled
-                                ? "Nainstalováno – NotchMax ví přesně, kdy Claude pracuje, dokončí tah nebo čeká na povolení."
-                                : "Nenainstalováno – stav se odhaduje jen z transkriptů, takže „čeká na tebe“ se nepozná.") {
-                    PermissionStatusBadge(text: monitor.hooksInstalled ? "Aktivní" : "Neaktivní",
+                                ? L("Nainstalováno – NotchMax ví přesně, kdy Claude pracuje, dokončí tah nebo čeká na povolení.")
+                                : L("Nenainstalováno – stav se odhaduje jen z transkriptů, takže „čeká na tebe“ se nepozná.")) {
+                    PermissionStatusBadge(text: monitor.hooksInstalled ? L("Aktivní") : L("Neaktivní"),
                                           color: monitor.hooksInstalled ? Color.green : Color.white.opacity(0.3))
                 }
                 SettingsDivider()
-                SettingsActionRow(title: monitor.hooksInstalled ? "Spravovat hooky" : "Instalovat hooky",
-                                  subtitle: "Upraví ~/.claude/settings.json (původní obsah zůstane, záloha v settings.json.notchmax-backup). Platí pro nově spuštěné relace.") {
+                SettingsActionRow(title: monitor.hooksInstalled ? L("Spravovat hooky") : L("Instalovat hooky"),
+                                  subtitle: L("Upraví ~/.claude/settings.json (původní obsah zůstane, záloha v settings.json.notchmax-backup). Platí pro nově spuštěné relace.")) {
                     if monitor.hooksInstalled {
-                        GlassPill(title: "Přeinstalovat", symbol: "arrow.clockwise") { install() }
+                        GlassPill(title: L("Přeinstalovat"), symbol: "arrow.clockwise") { install() }
                             .fixedSize()
-                        GlassPill(title: "Odinstalovat", symbol: "trash", tint: Color.red.opacity(0.3)) { uninstall() }
+                        GlassPill(title: L("Odinstalovat"), symbol: "trash", tint: Color.red.opacity(0.3)) { uninstall() }
                             .fixedSize()
                     } else {
-                        GlassPill(title: "Instalovat hooky", symbol: "square.and.arrow.down",
+                        GlassPill(title: L("Instalovat hooky"), symbol: "square.and.arrow.down",
                                   tint: settings.accent.color.opacity(0.35)) { install() }
                             .fixedSize()
                     }
@@ -63,20 +63,21 @@ struct ClaudeSettingsSection: View {
                 }
                 SettingsDivider()
                 SettingsNote(symbol: "info.circle",
-                             text: "Hooky na události SessionStart, UserPromptSubmit, PreToolUse, Notification, Stop a SessionEnd jen připíšou řádek do ~/Library/Application Support/NotchMax/claude-events.jsonl (pomocí tr, date a printf, které jsou v každém macOS). Nic neblokují, nic nevypisují do konverzace a nikam se neposílají. Odinstalace odstraní jen položky označené „NotchMax“.")
+                             text: L("Hooky na události SessionStart, UserPromptSubmit, PreToolUse, Notification, Stop a SessionEnd jen připíšou řádek do ~/Library/Application Support/NotchMax/claude-events.jsonl (pomocí tr, date a printf, které jsou v každém macOS). Nic neblokují, nic nevypisují do konverzace a nikam se neposílají. Odinstalace odstraní jen položky označené „NotchMax“."))
             }
 
-            SettingsCard(header: "Relace") {
-                SettingsActionRow(title: "Nalezené relace",
-                                  subtitle: "Za posledních 24 hodin: \(monitor.sessions.count) · pracuje \(monitor.workingCount) · čeká \(monitor.waitingCount)") {
-                    GlassPill(title: "Obnovit", symbol: "arrow.clockwise") { monitor.refresh() }
+            SettingsCard(header: L("Relace")) {
+                SettingsActionRow(title: L("Nalezené relace"),
+                                  subtitle: L("Za posledních 24 hodin: %ld · pracuje %ld · čeká %ld",
+                                              monitor.sessions.count, monitor.workingCount, monitor.waitingCount)) {
+                    GlassPill(title: L("Obnovit"), symbol: "arrow.clockwise") { monitor.refresh() }
                         .fixedSize()
-                    GlassPill(title: "Otevřít ~/.claude", symbol: "folder") { openClaudeFolder() }
+                    GlassPill(title: L("Otevřít ~/.claude"), symbol: "folder") { openClaudeFolder() }
                         .fixedSize()
                 }
                 SettingsDivider()
                 SettingsNote(symbol: "eye.slash",
-                             text: "Vidět jsou jen relace Claude Code (CLI v terminálu, případně v IDE) na tomto Macu – čtou se z ~/.claude/projects. Konverzace v aplikaci Claude pro desktop ani chaty na claude.ai se lokálně neukládají, takže je NotchMax zobrazit nemůže.")
+                             text: L("Vidět jsou jen relace Claude Code (CLI v terminálu, případně v IDE) na tomto Macu – čtou se z ~/.claude/projects. Konverzace v aplikaci Claude pro desktop ani chaty na claude.ai se lokálně neukládají, takže je NotchMax zobrazit nemůže."))
             }
         }
     }
@@ -85,7 +86,7 @@ struct ClaudeSettingsSection: View {
         do {
             try monitor.installHooks()
             errorMessage = nil
-            infoMessage = "Hooky jsou nainstalované. Projeví se v nově spuštěných relacích Claude Code (běžící relaci restartuj)."
+            infoMessage = L("Hooky jsou nainstalované. Projeví se v nově spuštěných relacích Claude Code (běžící relaci restartuj).")
         } catch {
             infoMessage = nil
             errorMessage = error.localizedDescription
@@ -96,7 +97,7 @@ struct ClaudeSettingsSection: View {
         do {
             try monitor.uninstallHooks()
             errorMessage = nil
-            infoMessage = "Hooky NotchMax byly odebrány, ostatní nastavení zůstalo beze změny."
+            infoMessage = L("Hooky NotchMax byly odebrány, ostatní nastavení zůstalo beze změny.")
         } catch {
             infoMessage = nil
             errorMessage = error.localizedDescription

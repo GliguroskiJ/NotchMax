@@ -29,8 +29,8 @@ struct ShelfView: View {
         return ZStack {
             if isEmpty {
                 EmptyState(symbol: targeted ? "arrow.down.circle.fill" : "arrow.down.doc",
-                           title: "Přetáhni sem soubory",
-                           message: "Odsud je pak přetáhneš jinam nebo pošleš přes AirDrop")
+                           title: L("Přetáhni sem soubory"),
+                           message: L("Odsud je pak přetáhneš jinam nebo pošleš přes AirDrop"))
             } else {
                 ScrollView(.horizontal) {
                     HStack(spacing: NotchLayout.spacingS) {
@@ -59,9 +59,9 @@ struct ShelfView: View {
         GlassContainer(spacing: NotchLayout.spacingS) {
             VStack(spacing: NotchLayout.spacingS) {
                 GlassIconButton(symbol: "airplayaudio", size: 40) { shelf.airDrop(shelf.items) }
-                    .help("Poslat vše přes AirDrop")
+                    .help(L("Poslat vše přes AirDrop"))
                 GlassIconButton(symbol: "trash", size: 40) { shelf.clear() }
-                    .help("Vyprázdnit odkladiště")
+                    .help(L("Vyprázdnit odkladiště"))
             }
         }
         .frame(maxHeight: .infinity)

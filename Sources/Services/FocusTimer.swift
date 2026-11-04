@@ -97,7 +97,7 @@ final class FocusTimer: ObservableObject {
             if !result.ok {
                 self.focusActive = false
                 self.enableRequest = nil
-                self.focusError = result.error ?? "Nerušit se nepodařilo zapnout"
+                self.focusError = result.error ?? L("Nerušit se nepodařilo zapnout")
             } else if !result.changed {
                 // „Nerušit“ už bylo zapnuté uživatelem – po skončení ho nevypínat.
                 self.focusActive = false
@@ -116,7 +116,7 @@ final class FocusTimer: ObservableObject {
         Task { @MainActor in
             let result: FocusChangeResult = await request.value
             if !result.ok {
-                self.focusError = result.error ?? "Nerušit se nepodařilo vypnout"
+                self.focusError = result.error ?? L("Nerušit se nepodařilo vypnout")
             }
         }
     }

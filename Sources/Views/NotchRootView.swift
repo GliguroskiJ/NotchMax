@@ -367,6 +367,8 @@ struct NotchRootView: View {
         }
         .frame(width: NotchLayout.panelSize.width, height: NotchLayout.panelSize.height, alignment: .top)
         .preferredColorScheme(.dark)
+        // Při změně jazyka se celý notch postaví znovu, aby se všechny texty přeložily.
+        .id(settings.language)
         // Oblast pro najetí myší (NotchWindowController.closedHotRect) kopíruje šířku live activity i HUD.
         .onChange(of: hoverSides, initial: true) { _, sides in
             vm.closedSideWidths = (sides.left, sides.right)
@@ -449,7 +451,7 @@ struct CompactActivity: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Levá strana: obsah uprostřed své oblasti (obě strany jsou stejně široké → symetrie).
+    /// Levá strana: obsah přiléhá k levému vnějšímu okraji (obě strany jsou stejně široké → symetrie).
     @ViewBuilder private var leftSide: some View {
         if let piece = layout.left, layout.leftWidth > 0 {
             ZStack {
@@ -457,7 +459,7 @@ struct CompactActivity: View {
                     .id(piece)
                     .transition(pieceTransition)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, NotchLayout.compactOuterPadding)
             .padding(.trailing, NotchLayout.compactInnerPadding)
         } else {
@@ -465,7 +467,7 @@ struct CompactActivity: View {
         }
     }
 
-    /// Pravá strana: obsah uprostřed své oblasti, tečky soukromí úplně vpravo.
+    /// Pravá strana: obsah přiléhá k pravému vnějšímu okraji, tečky soukromí úplně vpravo.
     @ViewBuilder private var rightSide: some View {
         if layout.rightWidth > 0 {
             HStack(spacing: 0) {
@@ -475,7 +477,7 @@ struct CompactActivity: View {
                             .id(piece)
                             .transition(pieceTransition)
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 } else {
                     Spacer(minLength: 0)
                 }
@@ -639,15 +641,14 @@ private struct CompactClaudeSparkle: View {
 struct OpenPanel: View {
     @EnvironmentObject private var vm: NotchViewModel
     @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var battery: BatteryMonitor
     @EnvironmentObject private var media: MediaMonitor
     @Namespace private var tabNamespace
 
     /// Horní rohy tvaru se rozšiřují ven, takže tělo je užší o poloměr na každé straně.
     private var sideInset: CGFloat { NotchLayout.sideInset }
 
-    /// Mezera v hlavičce pro fyzický notch (+ 8 pt na každou stranu).
-    private var notchGap: CGFloat { vm.geometry.notchSize.width + 16 }
+    /// Mezera v hlavičce pro fyzický notch (+ malý okraj na každou stranu).
+    private var notchGap: CGFloat { vm.geometry.notchSize.width + NotchLayout.headerNotchMargin }
 
     /// Šířka levé / pravé oblasti hlavičky vedle notche.
     private var headerSideWidth: CGFloat {
@@ -679,7 +680,7 @@ struct OpenPanel: View {
                     .frame(width: headerSideWidth, alignment: .trailing)
             }
             .frame(height: NotchLayout.controlHeight)
-            .padding(.top, NotchLayout.margin)
+            .padding(.top, NotchLayout.headerTop)
             .padding(.horizontal, sideInset)
 
             ZStack {
@@ -693,7 +694,7 @@ struct OpenPanel: View {
             .animation(.smooth(duration: 0.3), value: vm.tab)
             .animation(.smooth(duration: 0.3), value: vm.showMirror)
             .padding(.horizontal, sideInset)
-            .padding(.top, NotchLayout.spacingS)
+            .padding(.top, NotchLayout.headerGap)
             .padding(.bottom, NotchLayout.margin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .clipped()
@@ -781,34 +782,14 @@ struct OpenPanel: View {
                                     size: NotchLayout.controlHeight) {
                         withAnimation(.smooth(duration: 0.3)) { vm.showMirror.toggle() }
                     }
-                    .help(vm.showMirror ? "Skrýt zrcátko" : "Zrcátko")
-                }
-                if battery.hasBattery {
-                    batteryPill
+                    .help(vm.showMirror ? L("Skrýt zrcátko") : L("Zrcátko"))
                 }
                 GlassIconButton(symbol: "gearshape.fill", size: NotchLayout.controlHeight) {
                     openNotchMaxSettings()
                 }
-                .help("Nastavení")
+                .help(L("Nastavení"))
             }
         }
-    }
-
-    private var batteryPill: some View {
-        HStack(spacing: 4) {
-            Image(systemName: BatteryIcon.name(level: battery.level, charging: battery.isCharging))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(battery.isCharging ? Color.green : Color.white.opacity(0.8))
-            Text("\(battery.level) %")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Color.white.opacity(0.9))
-        }
-        .padding(.horizontal, 10)
-        .frame(height: NotchLayout.controlHeight)
-        .notchGlass(in: Capsule(),
-                    tint: battery.isCharging ? Color.green.opacity(0.14) : Color.white.opacity(0.05),
-                    interactive: true)
     }
 }
 

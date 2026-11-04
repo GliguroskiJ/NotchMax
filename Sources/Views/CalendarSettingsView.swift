@@ -34,17 +34,17 @@ struct CalendarSettings: View {
     // MARK: Přístup a účty
 
     private var accessCard: some View {
-        CalSettingsCard(header: "Kalendáře macOS") {
-            CalSettingsRow(title: "Přístup ke kalendářům",
-                           subtitle: "Kalendáře z aplikace Kalendář – iCloud, Exchange i Google účet přidaný do macOS.") {
+        CalSettingsCard(header: L("Kalendáře macOS")) {
+            CalSettingsRow(title: L("Přístup ke kalendářům"),
+                           subtitle: L("Kalendáře z aplikace Kalendář – iCloud, Exchange i Google účet přidaný do macOS.")) {
                 HStack(spacing: 10) {
                     CalStatusBadge(color: systemStatusColor, text: systemStatusText)
                     switch calendar.access {
                     case .unknown:
-                        GlassPill(title: "Povolit přístup", symbol: "checkmark",
+                        GlassPill(title: L("Povolit přístup"), symbol: "checkmark",
                                   tint: CalendarConnectStyle.tint) { calendar.requestAccess() }
                     case .denied:
-                        GlassPill(title: "Otevřít nastavení", symbol: "arrow.up.forward",
+                        GlassPill(title: L("Otevřít nastavení"), symbol: "arrow.up.forward",
                                   tint: CalendarConnectStyle.tint) {
                             CalendarMonitor.openPrivacySettings()
                         }
@@ -57,16 +57,16 @@ struct CalendarSettings: View {
             if calendar.isWriteOnly {
                 CalSettingsDivider()
                 CalSettingsNote(symbol: "exclamationmark.triangle",
-                                text: "NotchMax má od macOS jen přístup pro přidávání událostí, takže je nemůže číst. V Nastavení systému → Soukromí a zabezpečení → Kalendáře změň u NotchMax přístup na „Plný přístup“.")
+                                text: L("NotchMax má od macOS jen přístup pro přidávání událostí, takže je nemůže číst. V Nastavení systému → Soukromí a zabezpečení → Kalendáře změň u NotchMax přístup na „Plný přístup“."))
             } else if calendar.access == .denied {
                 CalSettingsDivider()
                 CalSettingsNote(symbol: "lock",
-                                text: "Přístup byl zamítnut. Povol ho v Nastavení systému → Soukromí a zabezpečení → Kalendáře.")
+                                text: L("Přístup byl zamítnut. Povol ho v Nastavení systému → Soukromí a zabezpečení → Kalendáře."))
             }
             CalSettingsDivider()
-            CalSettingsRow(title: "Google účet",
-                           subtitle: "V Internetových účtech přidej Google a zapni u něj Kalendáře – objeví se tady.") {
-                GlassPill(title: "Přidat Google účet", symbol: "person.crop.circle.badge.plus",
+            CalSettingsRow(title: L("Google účet"),
+                           subtitle: L("V Internetových účtech přidej Google a zapni u něj Kalendáře – objeví se tady.")) {
+                GlassPill(title: L("Přidat Google účet"), symbol: "person.crop.circle.badge.plus",
                           tint: CalendarConnectStyle.tint) {
                     CalendarMonitor.openInternetAccounts()
                 }
@@ -78,10 +78,10 @@ struct CalendarSettings: View {
     // MARK: Výběr kalendářů
 
     private var calendarsCard: some View {
-        CalSettingsCard(header: "Zobrazené kalendáře") {
+        CalSettingsCard(header: L("Zobrazené kalendáře")) {
             if calendar.calendarGroups.isEmpty {
                 CalSettingsNote(symbol: "calendar",
-                                text: "Zatím tu nejsou žádné kalendáře. Přidej účet v Internetových účtech nebo vytvoř kalendář v aplikaci Kalendář.")
+                                text: L("Zatím tu nejsou žádné kalendáře. Přidej účet v Internetových účtech nebo vytvoř kalendář v aplikaci Kalendář."))
             } else {
                 ForEach(Array(calendar.calendarGroups.enumerated()), id: \.element.id) { index, group in
                     if index > 0 { CalSettingsDivider() }
@@ -111,11 +111,11 @@ struct CalendarSettings: View {
     }
 
     private var systemStatusText: String {
-        if calendar.isWriteOnly { return "Jen zápis" }
+        if calendar.isWriteOnly { return L("Jen zápis") }
         switch calendar.access {
-        case .granted: return "Povoleno"
-        case .denied: return "Zamítnuto"
-        case .unknown: return "Zatím nepovoleno"
+        case .granted: return L("Povoleno")
+        case .denied: return L("Zamítnuto")
+        case .unknown: return L("Zatím nepovoleno")
         }
     }
 

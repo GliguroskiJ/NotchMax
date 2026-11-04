@@ -186,7 +186,7 @@ final class CalendarMonitor: ObservableObject {
                     let color = e.calendar.flatMap { NSColor(cgColor: $0.cgColor) } ?? NSColor.systemBlue
                     return CalEvent(
                         id: "\(e.eventIdentifier ?? UUID().uuidString)-\(e.startDate.timeIntervalSince1970)",
-                        title: e.title ?? "Bez názvu",
+                        title: e.title ?? L("Bez názvu"),
                         start: e.startDate,
                         end: e.endDate,
                         isAllDay: e.isAllDay,
@@ -242,29 +242,29 @@ final class CalendarMonitor: ObservableObject {
     }
 
     private static func sourceTitle(_ source: EKSource?) -> String {
-        guard let source else { return "Ostatní" }
+        guard let source else { return L("Ostatní") }
         let title = source.title
         let lower = title.lowercased()
         if lower.contains("gmail") || lower.contains("googlemail") || lower == "google" {
             return "Google – \(title)"
         }
         switch source.sourceType {
-        case .local: return "Na tomto Macu"
-        case .birthdays: return "Narozeniny"
-        case .subscribed: return "Odebírané kalendáře"
-        default: return title.isEmpty ? "Účet" : title
+        case .local: return L("Na tomto Macu")
+        case .birthdays: return L("Narozeniny")
+        case .subscribed: return L("Odebírané kalendáře")
+        default: return title.isEmpty ? L("Účet") : title
         }
     }
 
     private static func sourceKind(_ source: EKSource?) -> String {
         guard let source else { return "" }
         switch source.sourceType {
-        case .local: return "Místní"
+        case .local: return L("Místní")
         case .exchange: return "Exchange"
         case .calDAV: return source.title.lowercased().contains("icloud") ? "iCloud" : "CalDAV"
         case .mobileMe: return "iCloud"
-        case .subscribed: return "Odběr"
-        case .birthdays: return "Kontakty"
+        case .subscribed: return L("Odběr")
+        case .birthdays: return L("Kontakty")
         @unknown default: return ""
         }
     }

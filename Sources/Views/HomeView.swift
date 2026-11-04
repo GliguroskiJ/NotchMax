@@ -3,15 +3,21 @@ import SwiftUI
 /// Přehled: přehrávač + nejbližší schůzka + baterie.
 struct HomeView: View {
     var body: some View {
-        HStack(spacing: NotchLayout.spacingM) {
-            // Přehrávač má pevnou (užší) šířku, zbytek dostane kalendář a baterie.
-            MediaCard()
-                .frame(width: MediaCard.cardWidth)
-            VStack(spacing: NotchLayout.spacingM) {
-                NextEventCard()
-                BatteryCard()
+        GeometryReader { geo in
+            let spacing: CGFloat = NotchLayout.spacingM
+            let available: CGFloat = max(geo.size.width - spacing, 0)
+            // Přehrávač ~58 % šířky, kalendář a baterie zbytek – pružně podle šířky panelu.
+            let playerWidth: CGFloat = (available * MediaCard.widthFraction).rounded()
+            HStack(spacing: spacing) {
+                MediaCard()
+                    .frame(width: playerWidth)
+                VStack(spacing: spacing) {
+                    NextEventCard()
+                    BatteryCard()
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 }
@@ -22,16 +28,16 @@ struct MediaCard: View {
     @EnvironmentObject private var media: MediaMonitor
     @EnvironmentObject private var settings: AppSettings
 
-    /// Šířka karty přehrávače na Přehledu (obsah panelu má ~614 pt).
-    static let cardWidth: CGFloat = 340
-    private let artSize: CGFloat = 136
+    /// Podíl šířky Přehledu, který dostane karta přehrávače.
+    static let widthFraction: CGFloat = 0.58
+    private let artSize: CGFloat = 116
 
     var body: some View {
         Group {
             if media.hasTrack {
                 player
             } else {
-                EmptyState(symbol: "music.note", title: "Nic nehraje", message: "Spusť Apple Music nebo Spotify")
+                EmptyState(symbol: "music.note", title: L("Nic nehraje"), message: L("Spusť Apple Music nebo Spotify"))
             }
         }
         .glassCard(padding: 10)
@@ -39,7 +45,7 @@ struct MediaCard: View {
     }
 
     private var player: some View {
-        HStack(alignment: .center, spacing: NotchLayout.spacingL) {
+        HStack(alignment: .center, spacing: NotchLayout.spacingM) {
             artwork
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 5) {
@@ -47,6 +53,7 @@ struct MediaCard: View {
                         .font(.system(size: 9, weight: .bold))
                     Text(media.source?.appName ?? "")
                         .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
                     Spacer(minLength: 4)
                     EqualizerBars(color: settings.accent.color, active: media.isPlaying)
                 }
@@ -66,12 +73,15 @@ struct MediaCard: View {
                     .truncationMode(.tail)
                     .padding(.top, 2)
 
+                // Tlačítka uprostřed zbývajícího prostoru pod názvem (svisle i vodorovně).
                 Spacer(minLength: 6)
                 controls
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Spacer(minLength: 6)
             }
             .padding(.vertical, 4)
-            .padding(.trailing, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
         .frame(maxHeight: .infinity)
     }
@@ -99,16 +109,15 @@ struct MediaCard: View {
     private var controls: some View {
         HStack(spacing: 8) {
             GlassTransportButton(symbol: "backward.fill", size: 30) { media.previous() }
-                .help("Předchozí")
+                .help(L("Předchozí"))
             GlassTransportButton(symbol: media.isPlaying ? "pause.fill" : "play.fill", size: 40,
                                  prominent: true, tint: settings.accent.color.opacity(0.45)) {
                 media.togglePlayPause()
             }
-            .help(media.isPlaying ? "Pozastavit" : "Přehrát")
+            .help(media.isPlaying ? L("Pozastavit") : L("Přehrát"))
             GlassTransportButton(symbol: "forward.fill", size: 30) { media.next() }
-                .help("Další")
+                .help(L("Další"))
         }
-        .padding(.leading, 1)
     }
 }
 
@@ -134,7 +143,7 @@ struct NextEventCard: View {
             if let e = calendar.nextMeeting {
                 meeting(e)
             } else {
-                emptyRow(symbol: "checkmark.circle", title: "Žádné další schůzky", subtitle: dayLongSubtitle)
+                emptyRow(symbol: "checkmark.circle", title: L("Žádné další schůzky"), subtitle: dayLongSubtitle)
             }
         } else {
             // Není připojený žádný zdroj – nastavení nabídne připojení kalendářů macOS.
@@ -143,11 +152,11 @@ struct NextEventCard: View {
                     Image(systemName: "calendar")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(CalendarConnectStyle.accent)
-                    Text("Kalendář")
+                    Text(L("Kalendář"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.white)
                 }
-                GlassPill(title: "Připojit kalendář", symbol: "calendar.badge.plus",
+                GlassPill(title: L("Připojit kalendář"), symbol: "calendar.badge.plus",
                           tint: CalendarConnectStyle.tint) { openNotchMaxSettings(section: "calendar") }
             }
         }
@@ -157,7 +166,7 @@ struct NextEventCard: View {
         let ongoing = e.start <= Date()
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(ongoing ? "Právě probíhá" : "Další schůzka")
+                Text(ongoing ? L("Právě probíhá") : L("Další schůzka"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.45))
                 HStack(spacing: 6) {
@@ -176,7 +185,7 @@ struct NextEventCard: View {
             if let url = e.joinURL {
                 GlassIconButton(symbol: "video.fill", prominent: true, tint: Color.green.opacity(0.45),
                                 size: NotchLayout.controlHeight) { openURL(url) }
-                    .help("Připojit se")
+                    .help(L("Připojit se"))
             }
         }
     }
@@ -202,11 +211,11 @@ struct NextEventCard: View {
     private var dayLongSubtitle: String? {
         let now = Date()
         guard let e = calendar.events.first(where: { $0.isAllDay && $0.end > now }) else { return nil }
-        return "Celý den: \(e.title)"
+        return L("Celý den: %@", e.title)
     }
 
     private func whenText(_ e: CalEvent, ongoing: Bool) -> String {
-        if ongoing { return "do \(e.endText)" }
+        if ongoing { return L("do %@", e.endText) }
         if Calendar.current.isDateInToday(e.start) { return e.timeText }
         return "\(e.dayLabel) · \(e.startText)"
     }
@@ -244,14 +253,14 @@ struct BatteryCard: View {
                     .font(.system(size: 10))
                     .foregroundStyle(Color.white.opacity(0.5))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.75)
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
                 Image(systemName: "powerplug.fill")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.6))
-                Text("Napájení ze sítě")
+                Text(L("Napájení ze sítě"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.85))
             }
@@ -260,9 +269,9 @@ struct BatteryCard: View {
 
     private var statusText: String {
         if battery.isCharging {
-            if let m = battery.minutesToFull { return "Nabíjí se · plná za \(m / 60) h \(m % 60) min" }
-            return "Nabíjí se"
+            if let m = battery.minutesToFull { return L("Nabíjí se · plná za %d h %d min", m / 60, m % 60) }
+            return L("Nabíjí se")
         }
-        return battery.onAC ? "Zapojeno" : "Na baterii"
+        return battery.onAC ? L("Zapojeno") : L("Na baterii")
     }
 }

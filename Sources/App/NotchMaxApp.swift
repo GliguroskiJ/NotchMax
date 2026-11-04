@@ -23,7 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MediaKeyInterceptor.shared.start()
         HeadphonesMonitor.shared.start()
         FocusModeMonitor.shared.start()
-        NotificationMirror.shared.start()
         ClaudeHUDBridge.shared.start()
         MediaHUDBridge.shared.start()
         if controller == nil {
