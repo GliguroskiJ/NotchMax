@@ -5,7 +5,7 @@ import ServiceManagement
 // MARK: - Sekce
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, appearance, activities, modules, calendar, agents, updates
+    case general, appearance, activities, hud, modules, calendar, agents, updates
 
     var id: String { rawValue }
 
@@ -14,6 +14,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: return "Obecné"
         case .appearance: return "Vzhled"
         case .activities: return "Aktivity"
+        case .hud: return "HUD a oznámení"
         case .modules: return "Moduly"
         case .calendar: return "Kalendář"
         case .agents: return "Agenti"
@@ -26,6 +27,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .appearance: return "paintpalette"
         case .activities: return "rectangle.split.2x1"
+        case .hud: return "bell.badge.fill"
         case .modules: return "square.grid.2x2"
         case .calendar: return "calendar"
         case .agents: return "sparkles"
@@ -120,6 +122,7 @@ struct SettingsView: View {
         case .general: GeneralSettings()
         case .appearance: AppearanceSettings()
         case .activities: ActivitiesSettings()
+        case .hud: HUDSettingsSection()
         case .modules: ModulesSettings()
         case .calendar: CalendarSettings()
         case .agents: ClaudeSettingsSection()
@@ -165,6 +168,7 @@ private struct SettingsSidebar: View {
             SidebarItem(section: .general, isSelected: selection == .general) { selection = .general }
             SidebarItem(section: .appearance, isSelected: selection == .appearance) { selection = .appearance }
             SidebarItem(section: .activities, isSelected: selection == .activities) { selection = .activities }
+            SidebarItem(section: .hud, isSelected: selection == .hud) { selection = .hud }
             SidebarItem(section: .modules, isSelected: selection == .modules) { selection = .modules }
             SidebarItem(section: .calendar, isSelected: selection == .calendar) { selection = .calendar }
             SidebarItem(section: .agents, isSelected: selection == .agents) { selection = .agents }

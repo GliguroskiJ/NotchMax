@@ -19,6 +19,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Aplikace je jen v tmavé variantě (notch je černý).
         NSApp.appearance = NSAppearance(named: .darkAqua)
         createController()
+        // Služby, které posílají HUD události do notche (každá sama respektuje své nastavení).
+        MediaKeyInterceptor.shared.start()
+        HeadphonesMonitor.shared.start()
+        FocusModeMonitor.shared.start()
+        NotificationMirror.shared.start()
+        ClaudeHUDBridge.shared.start()
+        MediaHUDBridge.shared.start()
         if controller == nil {
             // Žádný displej (např. po probuzení): zkusit znovu při změně displejů.
             screenObserver = NotificationCenter.default.addObserver(

@@ -30,6 +30,8 @@ targets:
         NSHumanReadableCopyright: "NotchMax"
         NSCalendarsFullAccessUsageDescription: "NotchMax zobrazuje tvoje nadcházející události v notchi."
         NSAppleEventsUsageDescription: "NotchMax ovládá Hudbu a Spotify (přehrávání, přeskakování skladeb, obal alba)."
+        NSBluetoothAlwaysUsageDescription: "NotchMax ukazuje v notchi připojená sluchátka AirPods a stav jejich baterie."
+        NSCameraUsageDescription: "NotchMax ukazuje zrcátko kamery v notchi."
         SUFeedURL: "https://github.com/GliguroskiJ/NotchMax/releases/latest/download/appcast.xml"
         SUPublicEDKey: "Ru9vfr2TEvYXdHDacuXpTbJNxUHm4/yMXaYXMYLREEA="
         SUEnableAutomaticChecks: true

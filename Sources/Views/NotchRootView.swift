@@ -93,8 +93,21 @@ struct NotchRootView: View {
     @EnvironmentObject private var timer: FocusTimer
     @ObservedObject private var privacy = PrivacyMonitor.shared
     @ObservedObject private var claude = ClaudeMonitor.shared
+    @ObservedObject private var hud = HUDCenter.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let spring = Animation.spring(response: 0.52, dampingFraction: 0.84)
+
+    /// Pružina pro rozbalení notche do HUD (při omezení pohybu jen krátké prolnutí).
+    private var hudSpring: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.78)
+    }
+
+    /// HUD se ukazuje jen u zavřeného notche a ne během animace nabíjení.
+    private var hudEvent: HUDEvent? {
+        guard !vm.isOpen, vm.banner == nil, vm.chargeStart == nil else { return nil }
+        return hud.current
+    }
 
     private var privacyActive: Bool { privacy.micActive || privacy.cameraActive }
     private var claudeActive: Bool { claude.isWorking || claude.waitingCount > 0 }
@@ -136,7 +149,7 @@ struct NotchRootView: View {
     // MARK: Rozvržení
 
     private var closedLayout: ClosedLayout? {
-        guard !vm.isOpen, vm.banner == nil else { return nil }
+        guard !vm.isOpen, vm.banner == nil, hudEvent == nil else { return nil }
         return settings.dualActivities ? dualLayout() : singleLayout()
     }
 
@@ -220,24 +233,34 @@ struct NotchRootView: View {
 
     // MARK: Tvar
 
-    private var radii: (top: CGFloat, bottom: CGFloat) {
+    private func radii(hud: HUDLayout?) -> (top: CGFloat, bottom: CGFloat) {
         if vm.isOpen { return (NotchLayout.openTopRadius, NotchLayout.openBottomRadius) }
+        if let hud { return (NotchLayout.closedTopRadius, hud.bottomRadius) }
         return (NotchLayout.closedTopRadius, NotchLayout.closedBottomRadius)
     }
 
-    private func shapeSize(for layout: ClosedLayout?) -> CGSize {
+    private func shapeSize(for layout: ClosedLayout?, hud: HUDLayout?) -> CGSize {
         if vm.isOpen { return NotchLayout.openSize }
         let n = vm.geometry.notchSize
         let height = n.height + CGFloat(settings.notchOverhang)
+        // HUD: symetricky rozšířený (a případně vyšší) tvar, notch zůstává uprostřed.
+        if let hud {
+            return CGSize(width: n.width + 2 * NotchLayout.closedTopRadius + 2 * hud.side,
+                          height: height + hud.extraHeight)
+        }
         // Bez live activity (a během nabíjení) má tvar přesně šířku notche + horní zaoblení.
         let sides: CGFloat = (layout?.leftWidth ?? 0) + (layout?.rightWidth ?? 0)
         return CGSize(width: n.width + 2 * NotchLayout.closedTopRadius + sides, height: height)
     }
 
     var body: some View {
+        let event = hudEvent
+        let hudLayout: HUDLayout? = event.map { HUDLayout.forEvent($0) }
         let layout = closedLayout
-        let size = shapeSize(for: layout)
-        let r = radii
+        let size = shapeSize(for: layout, hud: hudLayout)
+        let r = radii(hud: hudLayout)
+        let hoverSides: HoverSides = hudLayout.map { HoverSides(left: $0.side, right: $0.side) }
+            ?? HoverSides(left: layout?.leftWidth ?? 0, right: layout?.rightWidth ?? 0)
         // Asymetrický tvar se posune tak, aby fyzický notch zůstal přesně uprostřed.
         let shift: CGFloat = layout.map { ($0.rightWidth - $0.leftWidth) / 2 } ?? 0
         ZStack(alignment: .top) {
@@ -245,7 +268,7 @@ struct NotchRootView: View {
                 NotchShape(topRadius: r.top, bottomRadius: r.bottom)
                     .fill(Color.black)
 
-                content(layout: layout)
+                content(layout: layout, event: event, hudLayout: hudLayout)
                     .clipShape(NotchShape(topRadius: r.top, bottomRadius: r.bottom))
 
                 if vm.isOpen {
@@ -261,16 +284,22 @@ struct NotchRootView: View {
             .animation(spring, value: vm.isOpen)
             .animation(spring, value: vm.banner)
             .animation(spring, value: layout)
+            .animation(hudSpring, value: hudLayout)
+            .animation(hudSpring, value: event?.family)
         }
         .frame(width: NotchLayout.panelSize.width, height: NotchLayout.panelSize.height, alignment: .top)
         .preferredColorScheme(.dark)
-        .onChange(of: layout, initial: true) { _, newLayout in
-            vm.closedSideWidths = (newLayout?.leftWidth ?? 0, newLayout?.rightWidth ?? 0)
+        // Oblast pro najetí myší (NotchWindowController.closedHotRect) kopíruje šířku live activity i HUD.
+        .onChange(of: hoverSides, initial: true) { _, sides in
+            vm.closedSideWidths = (sides.left, sides.right)
+        }
+        .onChange(of: vm.isOpen) { _, open in
+            if !open { vm.showMirror = false }
         }
     }
 
     @ViewBuilder
-    private func content(layout: ClosedLayout?) -> some View {
+    private func content(layout: ClosedLayout?, event: HUDEvent?, hudLayout: HUDLayout?) -> some View {
         if vm.isOpen {
             OpenPanel()
                 .transition(.asymmetric(
@@ -279,11 +308,34 @@ struct NotchRootView: View {
                         .animation(.smooth(duration: 0.38).delay(0.1)),
                     removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
                 ))
+        } else if let event = event, let hudLayout = hudLayout {
+            HUDView(event: event,
+                    revision: hud.revision,
+                    metrics: HUDMetrics(side: hudLayout.side,
+                                        notchWidth: vm.geometry.notchSize.width,
+                                        topHeight: vm.geometry.notchSize.height + CGFloat(settings.notchOverhang),
+                                        extraHeight: hudLayout.extraHeight),
+                    accent: settings.accent.color)
+                // Stejná rodina (např. opakované stisky hlasitosti) jen aktualizuje obsah, jiná vymění pohled.
+                .id(event.family)
+                .transition(.asymmetric(
+                    insertion: AnyTransition.hudContent
+                        .animation(reduceMotion
+                                   ? Animation.easeOut(duration: 0.15)
+                                   : Animation.spring(response: 0.4, dampingFraction: 0.82).delay(0.06)),
+                    removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+                ))
         } else if let layout = layout {
             CompactActivity(layout: layout, notchWidth: vm.geometry.notchSize.width)
                 .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
         }
     }
+}
+
+/// Šířky oblasti vedle notche pro najetí myší.
+private struct HoverSides: Equatable {
+    var left: CGFloat
+    var right: CGFloat
 }
 
 // MARK: - Live activity vedle notche
@@ -494,25 +546,52 @@ struct OpenPanel: View {
     /// Horní rohy tvaru se rozšiřují ven, takže tělo je užší o poloměr na každé straně.
     private var sideInset: CGFloat { NotchLayout.sideInset }
 
+    /// Mezera v hlavičce pro fyzický notch (+ 8 pt na každou stranu).
+    private var notchGap: CGFloat { vm.geometry.notchSize.width + 16 }
+
+    /// Šířka levé / pravé oblasti hlavičky vedle notche.
+    private var headerSideWidth: CGFloat {
+        max((NotchLayout.openSize.width - 2 * sideInset - notchGap) / 2, 0)
+    }
+
+    /// Šířka jedné záložky – zúží se, pokud by se všechny záložky nevešly vedle notche.
+    private var tabWidth: CGFloat {
+        let n = CGFloat(max(settings.visibleTabs.count, 1))
+        // Kapsle má vnitřní okraj 3 pt na každé straně, mezi záložkami 2 pt.
+        let fit = floor((headerSideWidth - 6 - 2 * (n - 1)) / n)
+        return max(min(32, fit), 22)
+    }
+
     private var cardTransition: AnyTransition {
         .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: NotchLayout.spacingM) {
+            // Záložky vlevo a stavové prvky vpravo mají pevně stejně široké oblasti,
+            // aby mezera pro fyzický notch byla přesně uprostřed a nic pod notch nezajelo.
+            HStack(spacing: 0) {
                 tabBar
-                Spacer(minLength: vm.geometry.notchSize.width + 16)
+                    .frame(width: headerSideWidth, alignment: .leading)
+                Color.clear
+                    .frame(width: notchGap)
                 statusCluster
+                    .frame(width: headerSideWidth, alignment: .trailing)
             }
             .frame(height: NotchLayout.controlHeight)
             .padding(.top, NotchLayout.margin)
             .padding(.horizontal, sideInset)
 
             ZStack {
-                tabContent
+                if vm.showMirror {
+                    MirrorView()
+                        .transition(cardTransition)
+                } else {
+                    tabContent
+                }
             }
             .animation(.smooth(duration: 0.3), value: vm.tab)
+            .animation(.smooth(duration: 0.3), value: vm.showMirror)
             .padding(.horizontal, sideInset)
             .padding(.top, NotchLayout.spacingS)
             .padding(.bottom, NotchLayout.margin)
@@ -524,6 +603,9 @@ struct OpenPanel: View {
         .onChange(of: settings.visibleTabs) { _, tabs in
             // Když uživatel vypne právě zobrazenou záložku, vrátit se na Přehled.
             if !tabs.contains(vm.tab) { vm.tab = .home }
+        }
+        .onChange(of: settings.mirrorButton) { _, enabled in
+            if !enabled { vm.showMirror = false }
         }
     }
 
@@ -577,10 +659,14 @@ struct OpenPanel: View {
             HStack(spacing: 2) {
                 ForEach(settings.visibleTabs) { tab in
                     TabButton(tab: tab,
-                              active: vm.tab == tab,
+                              active: vm.tab == tab && !vm.showMirror,
                               accent: settings.accent.color,
+                              width: tabWidth,
                               namespace: tabNamespace) {
-                        withAnimation(.smooth(duration: 0.3)) { vm.tab = tab }
+                        withAnimation(.smooth(duration: 0.3)) {
+                            vm.tab = tab
+                            vm.showMirror = false
+                        }
                     }
                 }
             }
@@ -592,6 +678,15 @@ struct OpenPanel: View {
     private var statusCluster: some View {
         GlassContainer(spacing: NotchLayout.spacingS) {
             HStack(spacing: NotchLayout.spacingS) {
+                if settings.mirrorButton {
+                    GlassIconButton(symbol: "camera.fill",
+                                    prominent: vm.showMirror,
+                                    tint: settings.accent.color.opacity(0.45),
+                                    size: NotchLayout.controlHeight) {
+                        withAnimation(.smooth(duration: 0.3)) { vm.showMirror.toggle() }
+                    }
+                    .help(vm.showMirror ? "Skrýt zrcátko" : "Zrcátko")
+                }
                 if battery.hasBattery {
                     batteryPill
                 }
@@ -626,6 +721,7 @@ private struct TabButton: View {
     let tab: NotchTab
     let active: Bool
     let accent: Color
+    let width: CGFloat
     let namespace: Namespace.ID
     let action: () -> Void
 
@@ -635,7 +731,7 @@ private struct TabButton: View {
         Button(action: action) {
             Image(systemName: tab.symbol)
                 .font(.system(size: 13, weight: .semibold))
-                .frame(width: 32)
+                .frame(width: width)
                 .foregroundStyle(foreground)
                 .frame(height: NotchLayout.controlHeight - 6)
                 .background { indicator }

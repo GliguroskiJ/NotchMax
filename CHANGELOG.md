@@ -2,6 +2,17 @@
 
 Poslední sekce se zobrazí v okně aktualizace. Při vydání nové verze přidej nahoru sekci `## x.y.z` (stejné číslo jako tag bez `v`) a pod ni řádky začínající `- `.
 
+## 0.1.9
+Novinky
+- Hlasitost, jas displeje a podsvícení klávesnice se ukazují v notchi místo systémového HUD (potřebuje oprávnění Zpřístupnění)
+- Animace při přehrávání: play, pauza, další a předchozí skladba
+- Připojení AirPods a sluchátek: točící se animace podle modelu, název a baterie sluchátek i pouzdra
+- Animace při přepnutí Soustředění
+- Notch blikne, když Claude agent dokončí práci nebo čeká na tebe
+- Zrcátko kamery: nové tlačítko vpravo vedle baterie a nastavení
+- Oznámení v notchi (experimentální, vyžaduje plný přístup k disku)
+- Nová sekce nastavení „HUD a oznámení“
+
 ## 0.1.8
 Novinky
 - Dvě aktivity naráz: vlevo a vpravo od notche si vybereš, co se zobrazí (hudba, časovač, schůzka, baterie, Claude)

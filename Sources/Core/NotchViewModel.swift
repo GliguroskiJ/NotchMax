@@ -42,6 +42,8 @@ final class NotchViewModel: ObservableObject {
     /// Začátek animace nabíjení (nil = neběží). Animaci kreslí TimelineView podle času,
     /// takže nezávisí na SwiftUI přechodech a přehraje se při každém zapojení.
     @Published var chargeStart: Date?
+    /// Rozbalený panel ukazuje zrcátko kamery místo obsahu záložky.
+    @Published var showMirror = false
 
     /// Aktuální šířka live activity vlevo / vpravo od notche (bez horního zaoblení).
     /// Zapisuje ji NotchRootView, čte NotchWindowController pro oblast najetí myší.

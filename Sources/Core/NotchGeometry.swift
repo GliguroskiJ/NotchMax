@@ -28,7 +28,7 @@ enum NotchLayout {
     /// Pevná velikost průhledného okna (obsahuje i prostor pro stín a animaci nabíjení).
     static let panelSize = CGSize(width: 720, height: 320)
     /// Velikost rozbaleného notche.
-    static let openSize = CGSize(width: 620, height: 252)
+    static let openSize = CGSize(width: 680, height: 252)
 
     // MARK: Zavřený notch a live activity
     /// Horní (vnější) zaoblení zavřeného tvaru – o tolik tvar na každé straně přesahuje fyzický notch.

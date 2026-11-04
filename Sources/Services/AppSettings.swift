@@ -106,6 +106,14 @@ final class AppSettings: ObservableObject {
     @Published var focusOffShortcut: String { didSet { UserDefaults.standard.set(focusOffShortcut, forKey: "focusOffShortcut") } }
     /// Identifikátory kalendářů (EKCalendar.calendarIdentifier), které se nemají zobrazovat.
     @Published var hiddenCalendarIDs: [String] { didSet { UserDefaults.standard.set(hiddenCalendarIDs, forKey: "hiddenCalendarIDs") } }
+    // HUD v notchi (hlasitost, jas, média, sluchátka, soustředění, oznámení) a zrcátko.
+    @Published var hudReplaceSystem: Bool { didSet { UserDefaults.standard.set(hudReplaceSystem, forKey: "hudReplaceSystem") } }
+    @Published var hudMedia: Bool { didSet { UserDefaults.standard.set(hudMedia, forKey: "hudMedia") } }
+    @Published var hudHeadphones: Bool { didSet { UserDefaults.standard.set(hudHeadphones, forKey: "hudHeadphones") } }
+    @Published var hudFocus: Bool { didSet { UserDefaults.standard.set(hudFocus, forKey: "hudFocus") } }
+    @Published var hudNotifications: Bool { didSet { UserDefaults.standard.set(hudNotifications, forKey: "hudNotifications") } }
+    @Published var hudClaude: Bool { didSet { UserDefaults.standard.set(hudClaude, forKey: "hudClaude") } }
+    @Published var mirrorButton: Bool { didSet { UserDefaults.standard.set(mirrorButton, forKey: "mirrorButton") } }
     /// 0 = nikdy nemazat
     @Published var shelfTTLHours: Int { didSet { UserDefaults.standard.set(shelfTTLHours, forKey: "shelfTTLHours") } }
 
@@ -136,6 +144,14 @@ final class AppSettings: ObservableObject {
             "chargeInsetLeft": 0.0,
             "chargeInsetRight": 0.0,
             "focusWithTimer": false,
+            "hudReplaceSystem": true,
+            "hudMedia": true,
+            "hudHeadphones": true,
+            "hudFocus": true,
+            "hudNotifications": false,
+            "hudClaude": true,
+            "mirrorButton": true,
+
             "focusOnShortcut": "NotchMax Focus On",
             "focusOffShortcut": "NotchMax Focus Off"
         ])
@@ -165,6 +181,13 @@ final class AppSettings: ObservableObject {
         focusWithTimer = d.bool(forKey: "focusWithTimer")
         focusOnShortcut = d.string(forKey: "focusOnShortcut") ?? "NotchMax Focus On"
         focusOffShortcut = d.string(forKey: "focusOffShortcut") ?? "NotchMax Focus Off"
+        hudReplaceSystem = d.bool(forKey: "hudReplaceSystem")
+        hudMedia = d.bool(forKey: "hudMedia")
+        hudHeadphones = d.bool(forKey: "hudHeadphones")
+        hudFocus = d.bool(forKey: "hudFocus")
+        hudNotifications = d.bool(forKey: "hudNotifications")
+        hudClaude = d.bool(forKey: "hudClaude")
+        mirrorButton = d.bool(forKey: "mirrorButton")
         hiddenCalendarIDs = d.stringArray(forKey: "hiddenCalendarIDs") ?? []
     }
 
